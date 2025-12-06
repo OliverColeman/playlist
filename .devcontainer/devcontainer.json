@@ -1,0 +1,45 @@
+{
+  "name": "Kinetic Integrations",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "TIMEZONE": "Australia/Sydney"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "eamodio.gitlens",
+        "mongodb.mongodb-vscode",
+        "ms-toolsai.datawrangler",
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.shellIntegration.history": 100000,
+        "terminal.history.scrollback": 100000,
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll": "explicit",
+        },
+      }
+    }
+  },
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  ],
+  "workspaceFolder": "/workspace",
+  "postCreateCommand": "/workspace/.devcontainer/postCreateCommand.sh",
+  "remoteEnv": {
+    "WORKSPACE": "/workspace",
+    "SCRATCH": "/workspace/scratch",
+    "TEST_OUTPUT": "/workspace/scratch/test_output",
+  },
+  // "runArgs": [
+  //   "--shm-size=8g",
+  // ],
+  // "features": {
+  //   "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  // }
+}
