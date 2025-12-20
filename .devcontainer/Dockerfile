@@ -5,26 +5,39 @@ ENV TZ=$TIMEZONE
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+RUN echo Cache bust 1
+
 RUN apt-get update && apt-get upgrade -y
 RUN apt-get install -y \
+    apt-transport-https \
     build-essential \
     ca-certificates \
     curl \
     git \
     gnupg \
+    iproute2 \
+    libssl-dev \
     lsb-release \
+    openssl \
+    pkg-config \
+    software-properties-common \
     sudo \
     tzdata \
     unzip \
-    wget
-RUN apt-get install -y \
-    software-properties-common \
-    apt-transport-https
-RUN apt-get install -y \
+    wget \
     zsh \
     zsh-antidote
-RUN apt-get install -y \
-    iproute2
+
+# Add MongoDB repo and install mongodb utils
+RUN curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | \
+    gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg \
+    --dearmor && \
+    echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.2 multiverse" | \
+    tee /etc/apt/sources.list.d/mongodb-org-8.2.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends mongodb-mongosh mongodb-database-tools && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set timezone
 RUN ln -fs /usr/share/zoneinfo/$TZ /etc/localtime && \
@@ -49,7 +62,8 @@ ENV HOME=/home/$USERNAME
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="$HOME/.cargo/bin:${PATH}"
 RUN cargo install --force cargo-make
-RUN cargo install trunk
+# RUN cargo install trunk
+RUN cargo install --locked cargo-leptos
 
 # Install Node.js
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash

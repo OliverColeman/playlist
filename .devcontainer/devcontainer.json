@@ -1,5 +1,5 @@
 {
-  "name": "Kinetic Integrations",
+  "name": "playl!st v2",
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
@@ -31,6 +31,16 @@
   ],
   "workspaceFolder": "/workspace",
   "postCreateCommand": "/workspace/.devcontainer/postCreateCommand.sh",
+  "forwardPorts": [
+    3000,
+    3001
+  ],
+  "portsAttributes": {
+    "8080": {
+      "label": "Trunk Dev Server",
+      "onAutoForward": "notify"
+    }
+  },
   "remoteEnv": {
     "WORKSPACE": "/workspace",
     "SCRATCH": "/workspace/scratch",
@@ -39,7 +49,7 @@
   // "runArgs": [
   //   "--shm-size=8g",
   // ],
-  // "features": {
-  //   "ghcr.io/devcontainers/features/docker-in-docker:2": {}
-  // }
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  }
 }

@@ -1,0 +1,17 @@
+name: external-services
+
+services:
+  mongodb:
+    image: mongo:8.0
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    entrypoint: mongod --bind_ip_all # Required to work in CI pipeline
+    command: --quiet
+    volumes:
+      - "${PWD}/scratch/external_services/mongodb_data:/data/db"
+    networks:
+      - net
+
+networks:
+  net:

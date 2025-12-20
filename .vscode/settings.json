@@ -4,5 +4,20 @@
         "**/.cargo/git/checkouts/**/*.rs": true,
         "**/lib/rustlib/src/rust/library/**/*.rs": true,
     },
-    "rust-analyzer.checkOnSave": false,
+    "rust-analyzer.checkOnSave": true,
+    "rust-analyzer.procMacro.ignored": {
+        "leptos_macro": [
+            "server"
+        ],
+    },
+    // if code that is cfg-gated for the `ssr` feature is shown as inactive,
+    // you may want to tell rust-analyzer to enable the `ssr` feature by default
+    //
+    // you can also use `rust-analyzer.cargo.allFeatures` to enable all features
+    "rust-analyzer.cargo.features": "all",
+    "rust-analyzer.rustfmt.overrideCommand": [
+        "leptosfmt",
+        "--stdin",
+        "--rustfmt"
+    ]
 }

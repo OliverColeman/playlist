@@ -1,4 +1,6 @@
 scratch/
 
 # cargo / rust
+debug/
 target/
+**/*.rs.bk
