@@ -61,14 +61,14 @@ ENV HOME=/home/$USERNAME
 # Install Rust and Cargo tools
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="$HOME/.cargo/bin:${PATH}"
-RUN cargo install --force cargo-make
+# RUN cargo install --force cargo-make
 # RUN cargo install trunk
-RUN cargo install --locked cargo-leptos
+RUN cargo install --locked cargo-make cargo-leptos leptosfmt
 
 # Install Node.js
-RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-ENV NVM_DIR=$HOME/.nvm
-RUN . "$NVM_DIR/nvm.sh" && nvm install 22
+# RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+# ENV NVM_DIR=$HOME/.nvm
+# RUN . "$NVM_DIR/nvm.sh" && nvm install 22
 
 # Setup Zsh with Antidote, config files are copied in postCreateCommand in devcontainer.json
 ENV ZDOTDIR=$HOME

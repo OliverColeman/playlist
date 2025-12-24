@@ -5,6 +5,8 @@ use leptos_router::{
     components::{Route, Router, Routes},
 };
 
+use crate::load_playlist;
+
 const DEFAULT_TITLE: &str = "Playl!st - the Just Dance archive";
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
@@ -33,10 +35,10 @@ pub fn App() -> impl IntoView {
     view! {
         // injects a stylesheet into the document <head>
         // id=leptos means cargo-leptos will hot-reload this stylesheet
-        <Stylesheet id="leptos" href="/pkg/{{project-name}}.css" />
+        <Stylesheet id="leptos" href="/pkg/playlistv2.css" />
 
         // sets the document title
-        <Title text="Playl!st - the Just Dance archive" />
+        <Title text=DEFAULT_TITLE />
 
         // content for this welcome page
         <Router>
@@ -52,12 +54,27 @@ pub fn App() -> impl IntoView {
 /// Renders the home page of your application.
 #[component]
 fn HomePage() -> impl IntoView {
-    // Creates a reactive value to update the button
-    let count = RwSignal::new(0);
-    let on_click = move |_| *count.write() += 1;
-
     view! {
         <h1>{DEFAULT_TITLE}</h1>
-        <button on:click=on_click>"Click Me: " {count}</button>
+        <PlayListPage />
+    }
+}
+
+#[component]
+fn PlayListPage() -> impl IntoView {
+    let playlist_resource = Resource::new(|| (), |_| async { load_playlist().await });
+    
+    view! {
+        <Suspense fallback=|| view! { <p>"Loading..."</p> }>
+            {move || {
+                playlist_resource.get().map(|result| {
+                    let playlist_name = result.unwrap_or("Error loading playlist".to_string());
+                    view! {
+                        <h1>"Playlist Page"</h1>
+                        <p>{playlist_name}</p>
+                    }
+                })
+            }}
+        </Suspense>
     }
 }

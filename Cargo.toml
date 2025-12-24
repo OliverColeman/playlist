@@ -14,18 +14,15 @@ leptos = { version = "0.8.15", features = ["csr"] }
 leptos_axum = { version = "0.8.7", optional = true }
 leptos_meta = "0.8.5"
 leptos_router = "0.8.11"
+serde = "1.0.228"
+
 
 tokio = { version = "1.48.0", features = ["rt-multi-thread"], optional = true }
 wasm-bindgen = { version = "0.2.106", optional = true }
 
-# [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# mongodb = "3.4.1"
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+mongodb = "3.4.1"
 # spotify-rs = "0.4.1"
-# tokio = { version = "1.48.0", features = ["full"] }
-
-# [target.'cfg(target_arch = "wasm32")'.dependencies]
-# tokio = { version = "1.48.0", default-features = false }
-
 
 [features]
 hydrate = ["leptos/hydrate", "dep:console_error_panic_hook", "dep:wasm-bindgen"]
@@ -48,7 +45,7 @@ panic = "abort"
 
 [package.metadata.leptos]
 # The name used by wasm-bindgen/cargo-leptos for the JS/WASM bundle. Defaults to the crate name
-output-name = "{{project-name}}"
+output-name = "playlistv2"
 
 # The site root folder is where cargo-leptos generate all output. WARNING: all content of this folder will be erased on a rebuild. Use it in your server setup.
 site-root = "target/site"
