@@ -9,7 +9,9 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 axum = { version = "0.8.8", optional = true }
+chrono = "0.4.42"
 console_error_panic_hook = { version = "0.1.7", optional = true }
+futures = "0.3.31"
 leptos = { version = "0.8.15", features = ["csr"] }
 leptos_axum = { version = "0.8.7", optional = true }
 leptos_meta = "0.8.5"

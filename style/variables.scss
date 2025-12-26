@@ -1,0 +1,299 @@
+$primary: #337ab7;
+$success: #5cb85c;
+$info: #5bc0de;
+$warning: #f0ad4e;
+$danger: #d9534f;
+
+$gray-darker: #222;
+$gray-dark: #333;
+$gray: #555;
+$gray-light: #777;
+$gray-lighter: #eee;
+
+$facebook: #3b5998;
+$google: #ea4335;
+$github: $gray-dark;
+
+$cb-blue: #03a9f4;
+$cb-aqua: #21ADC2;
+$cb-green: #00D490;
+$cb-yellow: #FFCF50;
+$cb-red: #DA5847;
+
+$link: #84d7fd;
+
+@mixin button-green {
+  color: #fff;
+  background-color: #5cb85c;
+  border-color: #4cae4c;
+}
+
+$default-border-radius: 4px;
+
+$verySmallScreenWidth: 500px;
+$smallScreenWidth: 650px;
+$mediumScreenWidth: 1000px;
+
+@mixin clearfix {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+
+@mixin breakpoint($point) {
+  @if $point ==desktop-large {
+    @media (min-width: 1200px) {
+      @content;
+    }
+  }
+
+  @else if $point ==desktop {
+    @media (min-width: 1024px) {
+      @content;
+    }
+  }
+
+  @else if $point ==tablet {
+    @media (min-width: 768px) {
+      @content;
+    }
+  }
+
+  @else if $point ==handheld-large {
+    @media (min-width: 480px) {
+      @content;
+    }
+  }
+
+  @else {
+    @media (min-width: $point) {
+      @content;
+    }
+  }
+}
+
+@mixin ie {
+
+  @media all and (-ms-high-contrast: none),
+  (-ms-high-contrast: active) {
+    @content;
+  }
+
+  @supports (-ms-accelerator:true) {
+    @content;
+  }
+}
+
+@mixin seperator-bottom {
+  border-bottom: 1px solid #777;
+  padding-bottom: 5px;
+}
+
+@mixin seperator-bottom-light {
+  border-bottom: 1px solid #333;
+  padding-bottom: 5px;
+}
+
+@mixin seperator-top {
+  padding-top: 5px;
+  border-top: 1px solid #777;
+}
+
+@mixin seperator-top-light {
+  padding-top: 5px;
+  border-top: 1px solid #333;
+}
+
+
+@mixin table {
+  display: table !important;
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
+  @include seperator-top;
+  text-align: left;
+
+  &>* {
+    display: table-row !important;
+
+    &.header-row {
+      color: $gray-light;
+      font-weight: bold;
+    }
+
+    &>* {
+      display: table-cell !important;
+      @include seperator-bottom-light;
+      margin: 0;
+      padding: 5px;
+
+      &:first-child {
+        padding-left: 0;
+      }
+
+      &:last-child {
+        padding-right: 0;
+      }
+
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: middle;
+    }
+  }
+
+  .header-Icons,
+  .IconsAndLinks {
+    color: transparent;
+    /* display: none  breaks table column width */
+  }
+
+  .header-Menu,
+  .context-menu {
+    width: 2em;
+    color: transparent;
+    /* display: none  breaks table column width */
+  }
+}
+
+
+@mixin playlist-table {
+  @include table;
+
+  &.date,
+  &.header-Date {
+    width: 8em;
+  }
+}
+
+$small-music-image: 5.5em;
+
+@mixin track-table {
+  @include table;
+
+  a.Track {
+    font-weight: bold;
+  }
+
+  .album-image,
+  .header-Cover {
+    width: $small-music-image;
+  }
+
+  .header-Length,
+  .duration {
+    width: 4.5em;
+  }
+
+  .header-Last-list {
+    width: 10%;
+  }
+
+  .list-compact-viewtype {
+
+    .header-Icons,
+    .IconsAndLinks {
+      width: 110px;
+    }
+  }
+
+  .list-viewtype {
+
+    // not compact view
+    .header-Icons,
+    .IconsAndLinks {
+      width: 60px;
+    }
+  }
+
+  .header-Count,
+  .popularity {
+    width: 4em;
+  }
+
+  @media (max-width: $smallScreenWidth) {
+
+    .header-row,
+    .duration {
+      display: none !important;
+    }
+
+    display: block !important;
+
+    >* {
+      display: block !important;
+      position: relative;
+      @include seperator-bottom-light;
+
+      >* {
+        display: inline-block !important;
+        width: auto;
+        border-bottom: none;
+        padding: 2px 0;
+      }
+    }
+
+    .artists {
+      display: block !important;
+    }
+
+    .IconsAndLinks,
+    .context-menu {
+      display: block !important;
+      position: absolute;
+      background-color: #000;
+    }
+
+    .IconsAndLinks {
+      width: auto !important;
+      max-width: 55px !important;
+      max-height: unset;
+      top: 0;
+      right: 0;
+      padding-left: 4px;
+    }
+
+    .context-menu {
+      bottom: 0;
+      right: -8px;
+    }
+
+    .popularity {
+      width: auto;
+      margin-right: 0.5em;
+
+      &::before {
+        content: "(";
+      }
+
+      &::after {
+        content: ")";
+      }
+    }
+  }
+
+  @media (max-width: $mediumScreenWidth) {
+
+    .header-Last-list,
+    .last-list,
+    .header-Album,
+    .Album {
+      display: none !important;
+    }
+  }
+}
+
+
+
+@mixin flex-row-wrap {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: -5px -10px -10px -10px;
+
+  &>* {
+    margin: 10px;
+  }
+}

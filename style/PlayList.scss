@@ -1,0 +1,119 @@
+@use 'variables' as *;
+
+
+.PlayList {
+  &.page-viewtype {
+    margin: 0.5em 0;
+    display: flex;
+    flex-flow: column;
+    height: 100%;
+
+    .item-details {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      margin: 0 -20px -10px 0;
+
+      &>* {
+        display: flex;
+        justify-content: space-between;
+        margin: 0 20px 10px 0;
+      }
+
+      .item-header {
+        width: 100%;
+      }
+
+      .notes {
+        width: 100%;
+        display: flex;
+
+        .data {
+          flex-grow: 1;
+        }
+      }
+    }
+  }
+
+  &.inline-viewtype {
+    &>* {
+      margin: 0 1em;
+    }
+  }
+
+  /* TODO Inline layout and remove some details on small screens */
+  .tracks-wrapper {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    margin-top: 10px;
+    margin-right: -10px;
+
+    .scrollarea {
+      height: 100%;
+    }
+  }
+}
+
+.modal.playlist-add-track {
+  .modal-title {
+    display: flex;
+    justify-content: space-between;
+  }
+}
+
+.PlayListList {
+
+  &.page-viewtype,
+  &.list-viewtype {
+    @include playlist-table;
+    margin-top: 15px;
+  }
+
+  .header-Length {
+    width: 8em;
+  }
+
+  .header-Icons,
+  .IconsAndLinks {
+    width: 25px;
+  }
+}
+
+@media (max-width: $verySmallScreenWidth) {
+  .PlayListList {
+    .header-Length {
+      display: none !important;
+    }
+
+    .duration {
+      display: none !important;
+    }
+  }
+}
+
+@media (max-width: $smallScreenWidth) {
+  .PlayList {
+    &.page-viewtype {
+      height: auto;
+      display: block;
+
+      .tracks-wrapper {
+        height: auto;
+        overflow: visible;
+      }
+    }
+  }
+
+  .PlayListList {
+    .header-Length {
+      width: 4.5em;
+    }
+
+    .duration .track-count {
+      display: none !important;
+    }
+  }
+}
