@@ -1,5 +1,7 @@
 @use 'variables' as *;
 @use 'PlayList.scss';
+@use 'Compiler.scss';
+@use 'Track.scss';
 
 body {
     font-family: Arial, sans-serif;
@@ -50,6 +52,11 @@ h5,
 h6 {
     color: $cb-blue;
     font-weight: bold;
+}
+
+h1,
+h2 {
+    text-align: center;
 }
 
 .item-header {
@@ -134,4 +141,55 @@ h6 {
             margin: 0 10px;
         }
     }
+}
+
+span.loading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+    vertical-align: middle;
+    font-size: 28px;
+    line-height: 1;
+    font-weight: bold;
+}
+
+span.loading:before {
+    /* Musical note character */
+    content: "\266B";
+    display: block;
+    margin-left: -2px;
+    margin-top: -4px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+
+.label.label-default {
+    background-color: transparent;
+    font-size: inherit;
+    font-weight: bold;
+    padding: 0;
+    margin: 0 0.75em 0 0;
+    line-height: inherit;
+    vertical-align: inherit;
+}
+
+pre {
+    color: inherit;
+    background: inherit;
+    font-size: inherit;
+    font-family: inherit;
+    padding: 0;
+    margin: 0;
+    border: none;
+    white-space: pre-line;
+    word-break: normal;
+    word-wrap: normal;
 }

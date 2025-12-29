@@ -36,22 +36,10 @@ crate::define_music_item_struct_with_common_fields!(PlayList, {
     spotify_user_id: Option<String>,
 });
 
-#[server]
-pub async fn load_playlist(id: String) -> Result<PlayList, crate::AppError> {
-    let result: Result<PlayList, crate::ssr::ServerError> = async {
-        let database = crate::ssr::get_database().await?;
-        let collection: mongodb::Collection<PlayList> = database.collection("PlayList");
-        let playlist: Option<PlayList> = collection
-            .find_one(bson::doc! { "groupId": JD_GROUP_ID, "_id": id })
-            .await?;
-        playlist.ok_or_else(|| crate::ssr::ServerError::NotFound("Playlist not found".to_string()))
+impl PartialEq for PlayList {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
     }
-    .await;
-    // Log error if any
-    if let Err(ref e) = result {
-        log!("Error loading playlist: {:?}", e);
-    }
-    result.map_err(|e| crate::AppError::from(e))
 }
 
 #[server]
@@ -60,10 +48,7 @@ pub async fn load_playlists() -> Result<Vec<PlayList>, crate::AppError> {
         use futures::stream::TryStreamExt;
         let database = crate::ssr::get_database().await?;
         let collection: mongodb::Collection<PlayList> = database.collection("PlayList");
-        let cursor = collection
-            .find(bson::doc! {"groupId": JD_GROUP_ID})
-            .sort(bson::doc! {"date": -1})
-            .await?;
+        let cursor = collection.find(bson::doc! {"groupId": JD_GROUP_ID}).await?;
         let playlists = cursor.try_collect().await?;
         Ok(playlists)
     }

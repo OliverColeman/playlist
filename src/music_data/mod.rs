@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+pub mod compiler;
 pub mod playlist;
+pub mod track;
 
 pub const JD_GROUP_ID: &str = "zmWKoBuAoSLCWDvzn";
 
@@ -13,6 +15,24 @@ pub struct ImageUrls {
     pub medium: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub large: Option<String>,
+}
+
+/// Trait for all music items with common fields
+pub trait MusicItem {
+    fn id(&self) -> &str;
+    fn name(&self) -> &str;
+    fn name_normalised(&self) -> &str;
+    fn name_normalised_strong(&self) -> Option<&str>;
+    fn disambiguation(&self) -> Option<&str>;
+    fn notes(&self) -> Option<&str>;
+    fn data_maybe_missing(&self) -> Option<&[String]>;
+    fn potential_duplicate(&self) -> Option<bool>;
+    fn needs_review(&self) -> Option<bool>;
+    fn image_urls(&self) -> Option<&ImageUrls>;
+    fn spotify_id(&self) -> Option<&str>;
+    fn mb_id(&self) -> Option<&str>;
+    fn soundex(&self) -> &[String];
+    fn double_metaphone(&self) -> Option<&[String]>;
 }
 
 #[macro_export]
@@ -71,6 +91,23 @@ macro_rules! define_music_item_struct_with_common_fields {
             pub double_metaphone: Option<Vec<String>>,
 
             $($(#[$attr])* pub $field_name: $field_type,)*
+        }
+
+        impl crate::music_data::MusicItem for $name {
+            fn id(&self) -> &str { &self.id }
+            fn name(&self) -> &str { &self.name }
+            fn name_normalised(&self) -> &str { &self.name_normalised }
+            fn name_normalised_strong(&self) -> Option<&str> { self.name_normalised_strong.as_deref() }
+            fn disambiguation(&self) -> Option<&str> { self.disambiguation.as_deref() }
+            fn notes(&self) -> Option<&str> { self.notes.as_deref() }
+            fn data_maybe_missing(&self) -> Option<&[String]> { self.data_maybe_missing.as_deref() }
+            fn potential_duplicate(&self) -> Option<bool> { self.potential_duplicate }
+            fn needs_review(&self) -> Option<bool> { self.needs_review }
+            fn image_urls(&self) -> Option<&crate::music_data::ImageUrls> { self.image_urls.as_ref() }
+            fn spotify_id(&self) -> Option<&str> { self.spotify_id.as_deref() }
+            fn mb_id(&self) -> Option<&str> { self.mb_id.as_deref() }
+            fn soundex(&self) -> &[String] { &self.soundex }
+            fn double_metaphone(&self) -> Option<&[String]> { self.double_metaphone.as_deref() }
         }
     };
 }
