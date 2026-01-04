@@ -1,0 +1,92 @@
+:root {
+    --text: #ddd;
+    --blue: #03a9f4;
+    --dark-blue: #00405d;
+    --aqua: #21ADC2;
+    --green: #00D490;
+    --yellow: #FFCF50;
+    --red: #DA5847;
+    --dark-grey: #222;
+}
+
+body {
+    background-color: #111;
+    color: var(--text);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 20px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    color: var(--blue);
+    font-weight: bold;
+}
+
+h1 {
+    font-size: 1.5em;
+    margin-bottom: 0.5em;
+}
+
+a {
+    display: inline-block;
+    color: var(--text);
+    text-decoration: none;
+    transition-duration: 0.2s;
+    transition-timing-function: ease;
+    transition-property: color, border-color;
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--dark-blue);
+    padding: 1px 4px;
+    border-radius: 4px;
+    margin: 2px;
+}
+
+a:hover {
+    color: white;
+    border-color: var(--blue);
+    cursor: pointer;
+}
+
+#header {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2em;
+
+    >* {
+        margin-bottom: 0.5em;
+    }
+
+    >h1 {
+        font-size: 1.5em;
+    }
+}
+
+table {
+    width: 100%;
+    border-spacing: 0;
+}
+
+th {
+    text-align: left;
+    color: var(--blue);
+    font-size: 1.1em;
+}
+
+td,
+th {
+    padding: 2px;
+    border-bottom: 1px solid #333;
+    border-collapse: separate;
+}
+
+.loading {
+    color: var(--blue);
+}

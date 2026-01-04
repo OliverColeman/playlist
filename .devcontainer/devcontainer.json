@@ -10,6 +10,8 @@
     "vscode": {
       "extensions": [
         "eamodio.gitlens",
+        "fill-labs.dependi",
+        "dioxuslabs.dioxus",
         "mongodb.mongodb-vscode",
         "ms-toolsai.datawrangler",
         "rust-lang.rust-analyzer",
@@ -19,10 +21,6 @@
         "terminal.integrated.defaultProfile.linux": "zsh",
         "terminal.integrated.shellIntegration.history": 100000,
         "terminal.history.scrollback": 100000,
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-          "source.fixAll": "explicit",
-        },
       }
     }
   },
@@ -32,8 +30,7 @@
   "workspaceFolder": "/workspace",
   "postCreateCommand": "/workspace/.devcontainer/postCreateCommand.sh",
   "forwardPorts": [
-    3000,
-    3001
+    8080,
   ],
   "portsAttributes": {
     "8080": {

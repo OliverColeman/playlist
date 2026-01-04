@@ -1,0 +1,24 @@
+[application]
+
+[web.watcher]
+watch_path = ["src", "assets"]
+
+[web.app]
+
+# HTML title tag content
+title = "The Just Dance Archives"
+
+# include `assets` in web platform
+[web.resource]
+
+# Additional CSS style files
+style = []
+
+# Additional JavaScript files
+script = []
+
+[web.resource.dev]
+
+# Javascript code file
+# serve: [dev-server] only
+script = []

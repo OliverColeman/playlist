@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 
+pub mod album;
+pub mod artist;
 pub mod compiler;
 pub mod playlist;
 pub mod track;
-
 pub const JD_GROUP_ID: &str = "zmWKoBuAoSLCWDvzn";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,7 +19,8 @@ pub struct ImageUrls {
 }
 
 /// Trait for all music items with common fields
-pub trait MusicItem {
+pub trait MusicItemBase {
+    fn collection_name() -> &'static str;
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn name_normalised(&self) -> &str;
@@ -35,9 +37,11 @@ pub trait MusicItem {
     fn double_metaphone(&self) -> Option<&[String]>;
 }
 
+pub trait MusicItem: MusicItemBase + Clone {}
+
 #[macro_export]
 macro_rules! define_music_item_struct_with_common_fields {
-    ($name:ident, { $($(#[$attr:meta])* $field_name:ident : $field_type:ty),* $(,)? }) => {
+    ($name:ident, $collection_name:expr, { $($(#[$attr:meta])* $field_name:ident : $field_type:ty),* $(,)? }) => {
         #[derive(Debug, Clone, Serialize, Deserialize)]
         #[serde(rename_all = "camelCase")]
         pub struct $name {
@@ -49,7 +53,7 @@ macro_rules! define_music_item_struct_with_common_fields {
             /// Normalized version of the name (from normaliseString)
             pub name_normalised: String,
 
-            /// Used for LinkedTrack matching (from normaliseStringStrong)
+            /// Used for LinkedT matching (from normaliseStringStrong)
             #[serde(skip_serializing_if = "Option::is_none")]
             pub name_normalised_strong: Option<String>,
 
@@ -93,7 +97,8 @@ macro_rules! define_music_item_struct_with_common_fields {
             $($(#[$attr])* pub $field_name: $field_type,)*
         }
 
-        impl crate::music_data::MusicItem for $name {
+        impl crate::music_data::MusicItemBase for $name {
+            fn collection_name() -> &'static str { $collection_name }
             fn id(&self) -> &str { &self.id }
             fn name(&self) -> &str { &self.name }
             fn name_normalised(&self) -> &str { &self.name_normalised }
@@ -109,5 +114,83 @@ macro_rules! define_music_item_struct_with_common_fields {
             fn soundex(&self) -> &[String] { &self.soundex }
             fn double_metaphone(&self) -> Option<&[String]> { self.double_metaphone.as_deref() }
         }
+
+        impl PartialEq for $name {
+            fn eq(&self, other: &Self) -> bool {
+                self.id == other.id
+            }
+        }
+
+        impl Unpin for $name {}
+        impl crate::music_data::MusicItem for $name {}
     };
+}
+
+pub trait MusicItemCollection<T: crate::music_data::MusicItem> {
+    fn sorted_by_name_normalised(&self, direction: i8) -> Vec<T>;
+    fn get(&self, id: &str) -> Option<&T>;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MusicItemsById<T: MusicItem> {
+    pub by_id: std::collections::HashMap<String, T>,
+}
+
+impl<T: MusicItem> MusicItemCollection<T> for MusicItemsById<T> {
+    fn sorted_by_name_normalised(&self, direction: i8) -> Vec<T> {
+        let mut items: Vec<T> = self.by_id.values().cloned().collect();
+        items.sort_by(|a, b| {
+            if direction >= 0 {
+                a.name_normalised().cmp(b.name_normalised())
+            } else {
+                b.name_normalised().cmp(a.name_normalised())
+            }
+        });
+        items
+    }
+
+    fn get(&self, id: &str) -> Option<&T> {
+        self.by_id.get(id)
+    }
+}
+
+impl<T: MusicItem> From<Vec<T>> for MusicItemsById<T> {
+    fn from(items: Vec<T>) -> Self {
+        let mut by_id = std::collections::HashMap::new();
+        for item in items {
+            by_id.insert(item.id().to_string(), item);
+        }
+        MusicItemsById { by_id }
+    }
+}
+
+#[cfg(feature = "server")]
+pub mod server {
+    use crate::server::ServerError;
+    use mongodb::bson;
+
+    pub async fn create_indexes<T>() -> Result<(), ServerError>
+    where
+        T: crate::music_data::MusicItem + Send + Sync + Unpin + for<'de> serde::Deserialize<'de>,
+    {
+        let database = crate::server::get_database().await?;
+        let collection: mongodb::Collection<T> = database.collection(T::collection_name());
+        let index_model = mongodb::IndexModel::builder()
+            .keys(bson::doc! {"name_normalised": 1})
+            .build();
+        collection.create_index(index_model).await?;
+        Ok(())
+    }
+
+    pub async fn load_items<T>(filter: bson::Document) -> Result<Vec<T>, ServerError>
+    where
+        T: crate::music_data::MusicItem + Send + Sync + Unpin + for<'de> serde::Deserialize<'de>,
+    {
+        use futures::stream::TryStreamExt;
+        let database = crate::server::get_database().await?;
+        let collection: mongodb::Collection<T> = database.collection(T::collection_name());
+        let cursor = collection.find(filter).await?;
+        let items = cursor.try_collect().await?;
+        Ok(items)
+    }
 }

@@ -63,7 +63,11 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="$HOME/.cargo/bin:${PATH}"
 # RUN cargo install --force cargo-make
 # RUN cargo install trunk
-RUN cargo install --locked cargo-make cargo-leptos leptosfmt
+# RUN cargo install --locked cargo-make 
+# cargo-leptos leptosfmt
+RUN curl -sSL https://dioxus.dev/install.sh | bash -s -- v0.7.2
+
+RUN rustup target add wasm32-unknown-unknown
 
 # Install Node.js
 # RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash

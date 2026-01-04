@@ -1,5 +1,3 @@
-#![cfg(feature = "ssr")]
-
 use std::env::VarError;
 
 pub struct MongodbConfig {
