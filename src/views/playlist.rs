@@ -2,6 +2,7 @@ use crate::components;
 use crate::music_data;
 use crate::music_data::MusicItemCollection;
 use crate::music_data::playlist::PlaylistCollection;
+use crate::views::track::TrackListComp;
 use dioxus::prelude::*;
 
 #[component]
@@ -27,11 +28,16 @@ pub fn PlaylistComp(id: String) -> Element {
                         h1 { components::Loading {} }
                     },
                     Some(playlist_data) => rsx! {
-                        div { class: "flex flex-col md:flex-row gap-[0.1em] md:gap-[3em] lg:items-center",
-                            h1 { class: "mb-0", "{playlist_data.playlist.name}" }
-                            div { class: "flex lg:flex-row md:flex-col sm:flex-row lg:gap-2",
+                        h1 {
 
 
+
+                            "Playlist: "
+                            span { class: "value", "{playlist_data.playlist.name}" }
+                        }
+                        div { class: "flex flex-col md:flex-row gap-[0.3em] md:gap-[2em] md:items-center",
+
+                            div { class: "flex",
 
                                 match playlist_data.playlist.date {
                                     Some(date) => rsx! {
@@ -41,7 +47,7 @@ pub fn PlaylistComp(id: String) -> Element {
                                     None => rsx! {},
                                 }
                             }
-                            div { class: "flex lg:flex-row md:flex-col sm:flex-row lg:gap-2",
+                            div { class: "flex",
                                 h6 { "Length:" }
                                 div {
                                     {crate::util::format_duration(playlist_data.playlist.duration)}
@@ -50,7 +56,7 @@ pub fn PlaylistComp(id: String) -> Element {
                                     " tracks"
                                 }
                             }
-                            div { class: "flex lg:flex-row md:flex-col sm:flex-row items-center md:items-start lg:items-center lg:gap-2",
+                            div { class: "flex items-center",
                                 h6 { "Compiler(s):" }
                                 div {
                                     match (&*playlists_by_id.read_unchecked(), &*compilers_by_id.read_unchecked()) {
@@ -88,79 +94,12 @@ pub fn PlaylistComp(id: String) -> Element {
                             None => rsx! {},
                         }
 
-                        table {
-                            thead {
-                                tr {
-                                    th { "Title" }
-                                    th { "Artist" }
-                                    th { class: "hidden lg:table-cell", "Album" }
-                                    th { class: "hidden md:table-cell w-[4.5em]", "Length" }
-                                    th { class: "hidden sm:table-cell w-[8em]", "Last list" }
-                                    th { class: "hidden", "Icons" }
-                                }
-                            }
-                            tbody {
-                                for track_id in playlist_data.playlist.track_ids.iter() {
-                                    match playlist_data.tracks_by_id.get(track_id) {
-                                        None => rsx! {
-                                            tr {
-                                                td { "<data missing>" }
-                                            }
-                                        },
-                                        Some(track) => rsx! {
-                                            tr { key: "{track.id}",
-                                                td { class: "font-semibold", "{track.name}" }
-                                                td {
-                                                    for artist_id in track.artist_ids.iter() {
-                                                        match playlist_data.artists_by_id.get(artist_id) {
-                                                            Some(artist) => rsx! {
-                                                                Link { key: "{artist.id}", to: "/artist/{artist.id}", "{artist.name}" }
-                                                            },
-                                                            None => rsx! {},
-                                                        }
-                                                    }
-                                                }
-                                                td { class: "hidden lg:table-cell",
-                                                    match &track.album_id {
-                                                        Some(album_id) => {
-                                                            match playlist_data.albums_by_id.get(album_id) {
-                                                                Some(album) => rsx! { "{album.name}" },
-                                                                None => rsx! {},
-                                                            }
-                                                        }
-                                                        None => rsx! {},
-                                                    }
-                                                }
-                                                td { class: "hidden md:table-cell",
-                                                    {crate::util::format_duration(track.duration.unwrap_or_default())}
-                                                }
-                                                td { class: "hidden sm:table-cell",
-                                                    match &*playlists_by_id.read_unchecked() {
-                                                        Some(playlists_map) => {
-                                                            let most_recent = playlists_map
-                                                                .sorted_by_date(-1)
-                                                                .into_iter()
-                                                                .filter(|p| p.track_ids.contains(&track.id))
-                                                                .next();
-
-
-                                                            match most_recent {
-                                                                Some(playlist) => rsx! {
-                                                                    Link { to: "/playlist/{playlist.id}", "{playlist.name}" }
-                                                                },
-                                                                None => rsx! { "-" },
-                                                            }
-                                                        }
-                                                        None => rsx! {
-                                                            components::Loading {}
-                                                        },
-                                                    }
-                                                }
-                                                td { "TODO" }
-                                            }
-                                        },
-                                    }
-                                }
+                        div { class: "mt-[1em] md:mt-[2em]",
+                            TrackListComp {
+                                track_ids: playlist_data.playlist.track_ids.clone(),
+                                tracks_by_id: playlist_data.tracks_by_id.clone(),
+                                artists_by_id: playlist_data.artists_by_id.clone(),
+                                albums_by_id: playlist_data.albums_by_id.clone(),
                             }
                         }
                     },

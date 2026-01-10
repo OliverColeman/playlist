@@ -12,3 +12,4 @@ pub mod compiler;
 pub mod home;
 pub mod navbar;
 pub mod playlist;
+pub mod track;

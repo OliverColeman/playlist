@@ -41,13 +41,18 @@ pub fn CompilerComp(id: String) -> Element {
         div { class: "lg:w-4xl mx-auto",
             div {
                 h1 {
+                    "Compiler: "
                     match &compiler {
-                        Some(compiler) => rsx! { "{compiler.name}'s Playlists" },
+                        Some(compiler) => rsx! {
+                            span { class: "value", "{compiler.name}" }
+                        },
                         None => rsx! {
                             components::Loading {}
                         },
                     }
                 }
+
+                h2 { "Playlists:" }
 
                 match &playlists_for_compiler {
                     Some(playlists) => rsx! {
