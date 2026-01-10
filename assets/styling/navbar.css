@@ -1,8 +1,0 @@
-#navbar {
-  display: flex;
-  flex-direction: row;
-}
-
-#navbar a {
-  margin-right: 20px;
-}

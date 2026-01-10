@@ -42,7 +42,7 @@ pub fn CompilerComp(id: String) -> Element {
             div {
                 h1 {
                     match &compiler {
-                        Some(compiler) => rsx! { "{compiler.name}" },
+                        Some(compiler) => rsx! { "{compiler.name}'s Playlists" },
                         None => rsx! {
                             components::Loading {}
                         },
@@ -95,7 +95,7 @@ pub fn CompilerListComp() -> Element {
     rsx! {
         div { class: "lg:w-4xl mx-auto",
             div {
-                h1 { "Compilers" }
+                h1 { "Playlist Compilers" }
                 match &*compilers_by_id.read_unchecked() {
                     Some(compilers) => rsx! {
                         table {
@@ -110,7 +110,7 @@ pub fn CompilerListComp() -> Element {
                                 for compiler in compilers.sorted_by_name_normalised(1).into_iter() {
                                     tr { key: "{compiler.id}",
                                         td { class: "w-1/4 md:w-3xs",
-                                            a { href: "/compiler/{compiler.id}", "{compiler.name}" }
+                                            Link { to: "/compiler/{compiler.id}", "{compiler.name}" }
                                         }
                                         td {
                                             match &playlists_by_compiler {
@@ -118,7 +118,7 @@ pub fn CompilerListComp() -> Element {
                                                     match map.get(&compiler.id) {
                                                         Some(playlists) => rsx! {
                                                             for playlist in playlists.iter() {
-                                                                a { key: "{playlist.id}", href: "/playlist/{playlist.id}", "{playlist.name} " }
+                                                                Link { key: "{playlist.id}", to: "/playlist/{playlist.id}", "{playlist.name} " }
                                                             }
                                                         },
                                                         None => rsx! {

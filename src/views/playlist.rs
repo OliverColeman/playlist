@@ -2,22 +2,24 @@ use crate::components;
 use crate::music_data;
 use crate::music_data::MusicItemCollection;
 use crate::music_data::playlist::PlaylistCollection;
-use dioxus::html::th;
 use dioxus::prelude::*;
 
 #[component]
 pub fn PlaylistComp(id: String) -> Element {
-    let playlist_data_resource = use_resource(move || {
-        let id = id.clone();
-        async move {
-            music_data::playlist::load_playlist_with_associated_data(id)
-                .await
-                .unwrap()
-        }
-    });
+    let playlist_data_resource = use_resource(use_reactive!(|id| async move {
+        music_data::playlist::load_playlist_with_associated_data(id.to_string())
+            .await
+            .unwrap()
+    }));
+
+    let playlists_by_id =
+        use_context::<Resource<music_data::MusicItemsById<music_data::playlist::PlayList>>>();
+
+    let compilers_by_id =
+        use_context::<Resource<music_data::MusicItemsById<music_data::compiler::Compiler>>>();
 
     rsx! {
-        div { class: "lg:w-6xl mx-auto",
+        div { class: "max-w-full lg:w-6xl mx-auto",
             div {
 
                 match &*playlist_data_resource.read_unchecked() {
@@ -25,16 +27,76 @@ pub fn PlaylistComp(id: String) -> Element {
                         h1 { components::Loading {} }
                     },
                     Some(playlist_data) => rsx! {
-                        h1 { "{playlist_data.playlist.name}" }
+                        div { class: "flex flex-col md:flex-row gap-[0.1em] md:gap-[3em] lg:items-center",
+                            h1 { class: "mb-0", "{playlist_data.playlist.name}" }
+                            div { class: "flex lg:flex-row md:flex-col sm:flex-row lg:gap-2",
+
+
+
+                                match playlist_data.playlist.date {
+                                    Some(date) => rsx! {
+                                        h6 { "Date:" }
+                                        div { {crate::util::format_date(date)} }
+                                    },
+                                    None => rsx! {},
+                                }
+                            }
+                            div { class: "flex lg:flex-row md:flex-col sm:flex-row lg:gap-2",
+                                h6 { "Length:" }
+                                div {
+                                    {crate::util::format_duration(playlist_data.playlist.duration)}
+                                    ", "
+                                    {playlist_data.playlist.track_ids.len().to_string()}
+                                    " tracks"
+                                }
+                            }
+                            div { class: "flex lg:flex-row md:flex-col sm:flex-row items-center md:items-start lg:items-center lg:gap-2",
+                                h6 { "Compiler(s):" }
+                                div {
+                                    match (&*playlists_by_id.read_unchecked(), &*compilers_by_id.read_unchecked()) {
+                                        (Some(playlists_by_id), Some(compilers_by_id)) => {
+                                            match playlists_by_id.get(&playlist_data.playlist.id) {
+                                                Some(playlist) => {
+                                                    rsx! {
+                                                        for compiler_id in playlist.compiler_ids.iter() {
+                                                            match compilers_by_id.get(compiler_id) {
+                                                                Some(compiler) => rsx! {
+                                                                    Link { key: "{compiler.id}", to: "/compiler/{compiler.id}", "{compiler.name} " }
+                                                                },
+                                                                None => rsx! {},
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                None => rsx! { "-" },
+                                            }
+                                        }
+                                        _ => rsx! {
+                                            components::Loading {}
+                                        },
+                                    }
+                                }
+                            }
+                        }
+
+                        match &playlist_data.playlist.notes {
+                            Some(notes) => rsx! {
+                                div { class: "max-h-[6em] overflow-y-auto [mask-image:linear-gradient(to_bottom,black_calc(100%-1.5em),transparent)]",
+                                    pre { class: "pb-[1.5em]", "{notes}" }
+                                }
+                            },
+                            None => rsx! {},
+                        }
+
                         table {
                             thead {
                                 tr {
                                     th { "Title" }
                                     th { "Artist" }
-                                    th { "Album" }
-                                    th { "Length" }
-                                    th { "Last list" }
-                                    th { "Icons" }
+                                    th { class: "hidden lg:table-cell", "Album" }
+                                    th { class: "hidden md:table-cell w-[4.5em]", "Length" }
+                                    th { class: "hidden sm:table-cell w-[8em]", "Last list" }
+                                    th { class: "hidden", "Icons" }
                                 }
                             }
                             tbody {
@@ -47,18 +109,18 @@ pub fn PlaylistComp(id: String) -> Element {
                                         },
                                         Some(track) => rsx! {
                                             tr { key: "{track.id}",
-                                                td { "{track.name}" }
+                                                td { class: "font-semibold", "{track.name}" }
                                                 td {
                                                     for artist_id in track.artist_ids.iter() {
                                                         match playlist_data.artists_by_id.get(artist_id) {
                                                             Some(artist) => rsx! {
-                                                                a { key: "{artist.id}", href: "/artist/{artist.id}", "{artist.name}" }
+                                                                Link { key: "{artist.id}", to: "/artist/{artist.id}", "{artist.name}" }
                                                             },
                                                             None => rsx! {},
                                                         }
                                                     }
                                                 }
-                                                td {
+                                                td { class: "hidden lg:table-cell",
                                                     match &track.album_id {
                                                         Some(album_id) => {
                                                             match playlist_data.albums_by_id.get(album_id) {
@@ -69,7 +131,32 @@ pub fn PlaylistComp(id: String) -> Element {
                                                         None => rsx! {},
                                                     }
                                                 }
-                                                td { {crate::util::format_duration(track.duration.unwrap_or_default())} }
+                                                td { class: "hidden md:table-cell",
+                                                    {crate::util::format_duration(track.duration.unwrap_or_default())}
+                                                }
+                                                td { class: "hidden sm:table-cell",
+                                                    match &*playlists_by_id.read_unchecked() {
+                                                        Some(playlists_map) => {
+                                                            let most_recent = playlists_map
+                                                                .sorted_by_date(-1)
+                                                                .into_iter()
+                                                                .filter(|p| p.track_ids.contains(&track.id))
+                                                                .next();
+
+
+                                                            match most_recent {
+                                                                Some(playlist) => rsx! {
+                                                                    Link { to: "/playlist/{playlist.id}", "{playlist.name}" }
+                                                                },
+                                                                None => rsx! { "-" },
+                                                            }
+                                                        }
+                                                        None => rsx! {
+                                                            components::Loading {}
+                                                        },
+                                                    }
+                                                }
+                                                td { "TODO" }
                                             }
                                         },
                                     }
@@ -109,9 +196,9 @@ pub fn PlaylistListComp(
                 for playlist in playlists.sorted_by_date(-1).into_iter() {
                     tr { key: "{playlist.id}",
                         td {
-                            a {
+                            Link {
                                 class: "max-w-[7em] truncate text-ellipsis",
-                                href: "/playlist/{playlist.id}",
+                                to: "/playlist/{playlist.id}",
                                 title: "{playlist.name}",
                                 "{playlist.name}"
                             }
@@ -131,7 +218,7 @@ pub fn PlaylistListComp(
                                             for compiler_id in playlist.compiler_ids.iter() {
                                                 match map.get(compiler_id) {
                                                     Some(compiler) => rsx! {
-                                                        a { key: "{compiler.id}", href: "/compiler/{compiler.id}", "{compiler.name} " }
+                                                        Link { key: "{compiler.id}", to: "/compiler/{compiler.id}", "{compiler.name} " }
                                                     },
                                                     None => rsx! {},
                                                 }
