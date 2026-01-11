@@ -4,10 +4,12 @@ use tracing::Level;
 mod components;
 mod music_data;
 mod views;
+use views::artist::ArtistComp;
 use views::compiler::{CompilerComp, CompilerListComp};
 use views::home::Home;
 use views::navbar::Navbar;
 use views::playlist::PlaylistComp;
+use views::popular::PopularTracksComp;
 use views::track::TrackComp;
 
 mod util;
@@ -36,6 +38,10 @@ enum Route {
         CompilerComp { id: String },
         #[route("/track/:id")]
         TrackComp { id: String },
+        #[route("/artist/:id")]
+        ArtistComp { id: String },
+        #[route("/popular")]
+        PopularTracksComp {},
 }
 
 // We can import assets in dioxus with the `asset!` macro. This macro takes a path to an asset relative to the crate root.

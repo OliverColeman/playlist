@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::hash::Hash;
+use std::collections::{HashMap, HashSet};
 
 use crate::components;
 use crate::music_data;
@@ -26,12 +25,12 @@ pub fn TrackComp(id: String) -> Element {
         &*playlists_by_id_resource.read_unchecked(),
         &*track_with_associated_data_resource.read_unchecked(),
     ) {
-        (Some(playlists), Some(track_with_associated_data)) => Some(
+        (Some(playlists), Some(track_data)) => Some(
             playlists
                 .sorted_by_date(-1)
                 .iter()
                 .filter(|pl| {
-                    track_with_associated_data
+                    track_data
                         .linked_tracks_by_id
                         .values()
                         .any(|t| pl.track_ids.contains(&t.id))
@@ -57,8 +56,8 @@ pub fn TrackComp(id: String) -> Element {
                         }
                     },
 
-                    Some(track_with_associated_data) => rsx! {
-                        match track_with_associated_data.linked_tracks_by_id.get(&id) {
+                    Some(track_data) => rsx! {
+                        match track_data.linked_tracks_by_id.get(&id) {
                             None => rsx! {
                                 h1 { "Track not found" }
                             },
@@ -75,7 +74,7 @@ pub fn TrackComp(id: String) -> Element {
                                         h6 { "Artist(s):" }
                                         div {
                                             for artist_id in track.artist_ids.iter() {
-                                                match track_with_associated_data.artists_by_id.get(artist_id) {
+                                                match track_data.artists_by_id.get(artist_id) {
                                                     Some(artist) => rsx! {
                                                         Link { key: "{artist.id}", to: "/artist/{artist.id}", "{artist.name} " }
                                                     },
@@ -87,11 +86,8 @@ pub fn TrackComp(id: String) -> Element {
                                     div { class: "flex",
                                         h6 { "Album:" }
                                         div {
-                                            match &track_with_associated_data
 
-                                                .albums_by_id
-                                                .get(&track.album_id.clone().unwrap_or_default())
-                                            {
+                                            match &track_data.albums_by_id.get(&track.album_id.clone().unwrap_or_default()) {
                                                 Some(album) => rsx! { "{album.name}" },
                                                 None => rsx! { "-" },
                                             }
@@ -127,10 +123,10 @@ pub fn TrackComp(id: String) -> Element {
                         div { class: "mt-[1em] md:mt-[2em]",
                             h2 { "Other versions of this track:" }
                             TrackListComp {
-                                track_ids: track_with_associated_data.linked_tracks_by_id.keys().cloned().collect(),
-                                tracks_by_id: Some(track_with_associated_data.linked_tracks_by_id.clone()),
-                                artists_by_id: Some(track_with_associated_data.artists_by_id.clone()),
-                                albums_by_id: Some(track_with_associated_data.albums_by_id.clone()),
+                                track_ids: track_data.linked_tracks_by_id.keys().cloned().collect(),
+                                tracks_by_id: Some(track_data.linked_tracks_by_id.clone()),
+                                artists_by_id: Some(track_data.artists_by_id.clone()),
+                                albums_by_id: Some(track_data.albums_by_id.clone()),
                             }
                         }
                     },
@@ -144,6 +140,7 @@ pub fn TrackComp(id: String) -> Element {
 pub fn TrackListComp(
     track_ids: Vec<String>,
     tracks_by_id: Option<HashMap<String, Track>>,
+    linked_tracks: Option<Vec<HashSet<String>>>,
     artists_by_id: Option<HashMap<String, Artist>>,
     albums_by_id: Option<HashMap<String, Album>>,
 ) -> Element {
@@ -158,7 +155,13 @@ pub fn TrackListComp(
                     th { "Artist" }
                     th { class: "hidden lg:table-cell", "Album" }
                     th { class: "hidden md:table-cell w-[4.5em]", "Length" }
-                    th { class: "hidden sm:table-cell w-[6em]", "Last list" }
+                    th {
+                        class: "hidden sm:table-cell w-[9em]",
+                        title: "How many playlists this track appears in / Most recent playlist containing this track",
+                        "List count /"
+                        br {}
+                        "Most recent"
+                    }
                     th { class: "invisible w-[110px]", "Icons" }
                 }
             }
@@ -209,20 +212,40 @@ pub fn TrackListComp(
                                 td { class: "hidden md:table-cell",
                                     {crate::util::format_duration(track.duration.unwrap_or_default())}
                                 }
-                                td { class: "hidden sm:table-cell",
+                                td {
+                                    class: "hidden sm:table-cell",
+                                    title: "How many playlists this track appears in / Most recent playlist containing this track",
                                     match &*playlists_by_id.read_unchecked() {
                                         Some(playlists_map) => {
-                                            let most_recent = playlists_map
+                                            let empty_set = HashSet::new();
+                                            let linked_tracks_for_this_track = linked_tracks
+
+                                                .as_ref()
+                                                .unwrap_or(&vec![empty_set.clone(); 0])
+                                                .iter()
+                                                .find(|lt_set| lt_set.contains(&track.id))
+                                                .cloned()
+                                                .unwrap_or(empty_set);
+                                            let matching_playlists: Vec<_> = playlists_map
                                                 .sorted_by_date(-1)
                                                 .into_iter()
-                                                .filter(|p| p.track_ids.contains(&track.id))
-                                                .next();
-
-                                            match most_recent {
-                                                Some(playlist) => rsx! {
-                                                    Link { to: "/playlist/{playlist.id}", "{playlist.name}" }
-                                                },
-                                                None => rsx! { "-" },
+                                                .filter(|p| {
+                                                    p.track_ids
+                                                        .clone()
+                                                        .into_iter()
+                                                        .any(|t_id| linked_tracks_for_this_track.contains(&t_id))
+                                                })
+                                                .collect();
+                                            let count = matching_playlists.len();
+                                            let most_recent = matching_playlists.first();
+                                            rsx! {
+                                                "{count} / "
+                                                match most_recent {
+                                                    Some(playlist) => rsx! {
+                                                        Link { to: "/playlist/{playlist.id}", "{playlist.name}" }
+                                                    },
+                                                    None => rsx! { "-" },
+                                                }
                                             }
                                         }
                                         None => rsx! {

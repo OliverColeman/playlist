@@ -8,8 +8,10 @@
 //! The [`Navbar`] component will be rendered on all pages of our app since every page is under the layout. The layout defines
 //! a common wrapper around all child routes.
 
+pub mod artist;
 pub mod compiler;
 pub mod home;
 pub mod navbar;
 pub mod playlist;
+pub mod popular;
 pub mod track;

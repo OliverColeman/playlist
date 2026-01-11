@@ -11,7 +11,6 @@
     --container-3xs: 16rem;
     --container-4xl: 56rem;
     --container-6xl: 72rem;
-    --font-weight-semibold: 600;
     --font-weight-bold: 700;
     --animate-spin: spin 1s linear infinite;
     --default-font-family: var(--font-sans);
@@ -203,9 +202,6 @@
   .mt-\[1em\] {
     margin-top: 1em;
   }
-  .mb-\[1em\] {
-    margin-bottom: 1em;
-  }
   .mb-\[2em\] {
     margin-bottom: 2em;
   }
@@ -227,26 +223,14 @@
   .max-h-\[6em\] {
     max-height: 6em;
   }
-  .w-1 {
-    width: calc(var(--spacing) * 1);
-  }
   .w-1\/4 {
     width: calc(1/4 * 100%);
-  }
-  .w-\[1\.5em\] {
-    width: 1.5em;
   }
   .w-\[4\.5em\] {
     width: 4.5em;
   }
-  .w-\[6em\] {
-    width: 6em;
-  }
-  .w-\[8em\] {
-    width: 8em;
-  }
-  .w-\[25px\] {
-    width: 25px;
+  .w-\[9em\] {
+    width: 9em;
   }
   .w-\[110px\] {
     width: 110px;
@@ -263,14 +247,8 @@
   .table-fixed {
     table-layout: fixed;
   }
-  .border-collapse {
-    border-collapse: collapse;
-  }
   .transform {
     transform: var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,);
-  }
-  .resize {
-    resize: both;
   }
   .flex-col {
     flex-direction: column;
@@ -287,14 +265,8 @@
   .gap-2 {
     gap: calc(var(--spacing) * 2);
   }
-  .gap-\[0\.1em\] {
-    gap: 0.1em;
-  }
   .gap-\[0\.3em\] {
     gap: 0.3em;
-  }
-  .gap-\[0\.5em\] {
-    gap: 0.5em;
   }
   .truncate {
     overflow: hidden;
@@ -303,10 +275,6 @@
   }
   .overflow-y-auto {
     overflow-y: auto;
-  }
-  .border {
-    border-style: var(--tw-border-style);
-    border-width: 1px;
   }
   .\[mask-image\:linear-gradient\(to_bottom\,black_calc\(100\%-1\.5em\)\,transparent\)\] {
     mask-image: linear-gradient(to bottom,black calc(100% - 1.5em),transparent);
@@ -331,19 +299,8 @@
     --tw-font-weight: var(--font-weight-bold);
     font-weight: var(--font-weight-bold);
   }
-  .font-semibold {
-    --tw-font-weight: var(--font-weight-semibold);
-    font-weight: var(--font-weight-semibold);
-  }
   .text-ellipsis {
     text-overflow: ellipsis;
-  }
-  .underline {
-    text-decoration-line: underline;
-  }
-  .outline {
-    outline-style: var(--tw-outline-style);
-    outline-width: 1px;
   }
   .filter {
     filter: var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,);
@@ -372,24 +329,9 @@
       display: table-cell;
     }
   }
-  .sm\:flex-row {
-    @media (width >= 40rem) {
-      flex-direction: row;
-    }
-  }
   .md\:mt-\[2em\] {
     @media (width >= 48rem) {
       margin-top: 2em;
-    }
-  }
-  .md\:mb-\[1em\] {
-    @media (width >= 48rem) {
-      margin-bottom: 1em;
-    }
-  }
-  .md\:mb-\[2em\] {
-    @media (width >= 48rem) {
-      margin-bottom: 2em;
     }
   }
   .md\:table-cell {
@@ -402,11 +344,6 @@
       width: var(--container-3xs);
     }
   }
-  .md\:flex-col {
-    @media (width >= 48rem) {
-      flex-direction: column;
-    }
-  }
   .md\:flex-row {
     @media (width >= 48rem) {
       flex-direction: row;
@@ -417,24 +354,9 @@
       align-items: center;
     }
   }
-  .md\:items-start {
-    @media (width >= 48rem) {
-      align-items: flex-start;
-    }
-  }
-  .md\:gap-2 {
-    @media (width >= 48rem) {
-      gap: calc(var(--spacing) * 2);
-    }
-  }
   .md\:gap-\[2em\] {
     @media (width >= 48rem) {
       gap: 2em;
-    }
-  }
-  .md\:gap-\[3em\] {
-    @media (width >= 48rem) {
-      gap: 3em;
     }
   }
   .lg\:table-cell {
@@ -450,21 +372,6 @@
   .lg\:w-6xl {
     @media (width >= 64rem) {
       width: var(--container-6xl);
-    }
-  }
-  .lg\:flex-row {
-    @media (width >= 64rem) {
-      flex-direction: row;
-    }
-  }
-  .lg\:items-center {
-    @media (width >= 64rem) {
-      align-items: center;
-    }
-  }
-  .lg\:gap-2 {
-    @media (width >= 64rem) {
-      gap: calc(var(--spacing) * 2);
     }
   }
 }
@@ -488,11 +395,6 @@
   syntax: "*";
   inherits: false;
 }
-@property --tw-border-style {
-  syntax: "*";
-  inherits: false;
-  initial-value: solid;
-}
 @property --tw-leading {
   syntax: "*";
   inherits: false;
@@ -500,11 +402,6 @@
 @property --tw-font-weight {
   syntax: "*";
   inherits: false;
-}
-@property --tw-outline-style {
-  syntax: "*";
-  inherits: false;
-  initial-value: solid;
 }
 @property --tw-blur {
   syntax: "*";
@@ -577,10 +474,8 @@
       --tw-rotate-z: initial;
       --tw-skew-x: initial;
       --tw-skew-y: initial;
-      --tw-border-style: solid;
       --tw-leading: initial;
       --tw-font-weight: initial;
-      --tw-outline-style: solid;
       --tw-blur: initial;
       --tw-brightness: initial;
       --tw-contrast: initial;

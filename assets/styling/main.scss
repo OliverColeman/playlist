@@ -13,7 +13,7 @@ body {
     background-color: #111;
     color: var(--text);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    margin: 20px;
+    margin: 10px;
 }
 
 h1,
@@ -28,6 +28,7 @@ h6 {
 
 h1 {
     font-size: 1.5em;
+    margin: 0.5em 0;
 
     .value {
         color: var(--text);
@@ -95,11 +96,12 @@ th {
     text-align: left;
     color: var(--blue);
     font-size: 1.1em;
+    line-height: 1em;
 }
 
 td,
 th {
-    padding: 2px;
+    padding: 3px;
     border-bottom: 1px solid #333;
     border-collapse: separate;
 }

@@ -9,6 +9,7 @@ pub fn Navbar() -> Element {
             id: "navbar",
             Link { to: Route::Home {}, "Playlists" }
             Link { to: Route::CompilerListComp {}, "Compilers" }
+            Link { to: Route::PopularTracksComp {}, "Popular" }
         }
 
         Outlet::<Route> {}
