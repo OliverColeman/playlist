@@ -1,17 +1,17 @@
 use crate::components;
-use crate::music_data;
-use crate::music_data::MusicItemCollection;
-use crate::music_data::playlist;
-use crate::music_data::playlist::PlaylistCollection;
 use crate::views::playlist::PlaylistListComp;
 use dioxus::prelude::*;
+use playlist_core::models;
+use playlist_core::models::MusicItemCollection;
+use playlist_core::models::playlist;
+use playlist_core::models::playlist::PlaylistCollection;
 
 #[component]
 pub fn CompilerComp(id: String) -> Element {
     let compilers_by_id =
-        use_context::<Resource<music_data::MusicItemsById<music_data::compiler::Compiler>>>();
+        use_context::<Resource<models::MusicItemsById<models::compiler::Compiler>>>();
     let playlists_by_id =
-        use_context::<Resource<music_data::MusicItemsById<music_data::playlist::PlayList>>>();
+        use_context::<Resource<models::MusicItemsById<models::playlist::PlayList>>>();
 
     let compilers_read = compilers_by_id.read_unchecked();
     let compiler = match &*compilers_read {
@@ -57,7 +57,7 @@ pub fn CompilerComp(id: String) -> Element {
                 match &playlists_for_compiler {
                     Some(playlists) => rsx! {
                         PlaylistListComp {
-                            playlists: music_data::MusicItemsById::from(playlists.clone()),
+                            playlists: models::MusicItemsById::from(playlists.clone()),
                             hide_compiler: true,
                         }
                     },
@@ -73,16 +73,16 @@ pub fn CompilerComp(id: String) -> Element {
 #[component]
 pub fn CompilerListComp() -> Element {
     let compilers_by_id =
-        use_context::<Resource<music_data::MusicItemsById<music_data::compiler::Compiler>>>();
+        use_context::<Resource<models::MusicItemsById<models::compiler::Compiler>>>();
     let playlists_by_id =
-        use_context::<Resource<music_data::MusicItemsById<music_data::playlist::PlayList>>>();
+        use_context::<Resource<models::MusicItemsById<models::playlist::PlayList>>>();
 
     let playlists_by_compiler: Option<
-        std::collections::HashMap<String, Vec<music_data::playlist::PlayList>>,
+        std::collections::HashMap<String, Vec<models::playlist::PlayList>>,
     > = match &*playlists_by_id.read_unchecked() {
         None => None,
         Some(playlists) => {
-            let mut map: std::collections::HashMap<String, Vec<music_data::playlist::PlayList>> =
+            let mut map: std::collections::HashMap<String, Vec<models::playlist::PlayList>> =
                 std::collections::HashMap::new();
             for playlist in playlists.sorted_by_date(-1) {
                 for compiler_id in &playlist.compiler_ids {

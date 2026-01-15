@@ -10,7 +10,7 @@ crate::define_music_item_struct_with_common_fields!(Album, "Album", {
 
 // #[server]
 // pub async fn load_albums(album_ids: Vec<String>) -> Result<Vec<Album>, crate::AppError> {
-//     let result = crate::music_data::load_items_by_ids::<Album>("Album", album_ids.clone()).await;
+//     let result = crate::models::load_items_by_ids::<Album>("Album", album_ids.clone()).await;
 
 //     if let Err(ref e) = result {
 //         log!("Error loading albums for album IDs {:?}: {:?}", album_ids, e);

@@ -1,0 +1,20 @@
+[package]
+name = "playlist-core"
+version = "0.1.0"
+authors = ["Oliver Coleman <oliver.coleman@gmail.com>"]
+edition = "2024"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+chrono = { workspace = true }
+futures = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+# Server-only dependencies
+mongodb = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+[features]
+default = []
+server = ["dep:mongodb", "dep:tokio"]

@@ -1,12 +1,12 @@
 use crate::components;
-use crate::music_data;
+use playlist_core::models;
 use crate::views::track::TrackListComp;
 use dioxus::prelude::*;
 
 #[component]
 pub fn PopularTracksComp() -> Element {
     let popular_tracks_resource =
-        use_resource(|| async move { music_data::track::load_popular_tracks().await.ok() });
+        use_resource(|| async move { crate::load_popular_tracks().await.ok() });
 
     rsx! {
         div { class: "max-w-full lg:w-6xl mx-auto",

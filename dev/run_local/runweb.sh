@@ -6,4 +6,4 @@ set -a
 source dev/run_local/.local.env
 set +a
 
-dx serve
+dx serve -p playlist-web

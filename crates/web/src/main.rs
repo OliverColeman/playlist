@@ -2,7 +2,6 @@ use dioxus::prelude::*;
 use tracing::Level;
 
 mod components;
-mod music_data;
 mod views;
 use views::artist::ArtistComp;
 use views::compiler::{CompilerComp, CompilerListComp};
@@ -12,10 +11,14 @@ use views::playlist::PlaylistComp;
 use views::popular::PopularTracksComp;
 use views::track::TrackComp;
 
-mod util;
+mod api;
+mod util; // API server functions - compiled for both server and client
 
 #[cfg(feature = "server")]
 mod server;
+
+// Re-export server functions so they're available with just crate::function_name
+pub use api::*;
 
 /// The Route enum is used to define the structure of internal routes in our app. All route enums need to derive
 /// the [`Routable`] trait, which provides the necessary methods for the router to work.
@@ -59,9 +62,17 @@ fn main() {
         // Create a new axum router for our Dioxus app
         let router = dioxus::server::router(App);
 
-        crate::music_data::server::create_indexes::<music_data::compiler::Compiler>()
-            .await
-            .unwrap();
+        // Create indexes if database is available
+        if let Err(e) = playlist_core::models::server::create_indexes::<
+            playlist_core::models::compiler::Compiler,
+        >()
+        .await
+        {
+            tracing::warn!(
+                "Failed to create indexes: {:?}. Server will continue without database.",
+                e
+            );
+        }
 
         // And then return it
         Ok(router)
@@ -77,23 +88,29 @@ fn main() {
 /// Components should be annotated with `#[component]` to support props, better error messages, and autocomplete
 #[component]
 fn App() -> Element {
-    let compilers: Resource<music_data::MusicItemsById<music_data::compiler::Compiler>> =
-        use_resource(|| async move {
-            let items = music_data::compiler::load_compilers()
-                .await
-                .unwrap_or_default();
-            music_data::MusicItemsById::from(items)
-        });
-    use_context_provider(|| compilers);
+    let compilers: Resource<
+        playlist_core::models::MusicItemsById<playlist_core::models::compiler::Compiler>,
+    > = use_resource(|| async move {
+        tracing::info!("Loading compilers...");
+        let items = crate::load_compilers()
+            .await
+            .inspect_err(|e| tracing::error!("Failed to load compilers: {:?}", e))
+            .unwrap_or_default();
+        playlist_core::models::MusicItemsById::from(items)
+    });
+    use_context_provider(move || compilers);
 
-    let playlists: Resource<music_data::MusicItemsById<music_data::playlist::PlayList>> =
-        use_resource(|| async move {
-            let items = music_data::playlist::load_playlists()
-                .await
-                .unwrap_or_default();
-            music_data::MusicItemsById::from(items)
-        });
-    use_context_provider(|| playlists);
+    let playlists: Resource<
+        playlist_core::models::MusicItemsById<playlist_core::models::playlist::PlayList>,
+    > = use_resource(|| async move {
+        tracing::info!("Loading playlists...");
+        let items = crate::load_playlists()
+            .await
+            .inspect_err(|e| tracing::error!("Failed to load playlists: {:?}", e))
+            .unwrap_or_default();
+        playlist_core::models::MusicItemsById::from(items)
+    });
+    use_context_provider(move || playlists);
 
     rsx! {
         // In addition to element and text (which we will see later), rsx can contain other components. In this case,

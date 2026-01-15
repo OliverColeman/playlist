@@ -1,0 +1,24 @@
+[package]
+name = "playlist-web"
+version = "0.1.0"
+authors = ["Oliver Coleman <oliver.coleman@gmail.com>"]
+edition = "2024"
+
+[dependencies]
+playlist-core = { path = "../core" }
+dioxus = { workspace = true, features = ["router", "fullstack"] }
+chrono = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+serde_json = { workspace = true }
+futures = { workspace = true }
+
+# Server-only dependencies (not compiled for wasm)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, optional = true }
+mongodb = { workspace = true, optional = true }
+
+[features]
+default = ["web"]
+web = ["dioxus/web"]
+server = ["dioxus/server", "dep:tokio", "dep:mongodb", "playlist-core/server"]

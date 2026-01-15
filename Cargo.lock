@@ -2609,13 +2609,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
-name = "playlist-v2"
+name = "playlist-cli"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "mongodb",
+ "playlist-core",
+ "tokio",
+]
+
+[[package]]
+name = "playlist-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "futures",
+ "mongodb",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "playlist-web"
 version = "0.1.0"
 dependencies = [
  "chrono",
  "dioxus",
  "futures",
  "mongodb",
+ "playlist-core",
  "serde",
  "serde_json",
  "tokio",

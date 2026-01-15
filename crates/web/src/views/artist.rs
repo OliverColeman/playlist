@@ -1,6 +1,6 @@
 use crate::components;
-use crate::music_data;
-use crate::music_data::playlist::PlaylistCollection;
+use playlist_core::models;
+use playlist_core::models::playlist::PlaylistCollection;
 use crate::views::track::TrackListComp;
 use dioxus::prelude::*;
 use std::collections::HashSet;
@@ -8,13 +8,13 @@ use std::collections::HashSet;
 #[component]
 pub fn ArtistComp(id: String) -> Element {
     let artist_with_associated_data_resource = use_resource(use_reactive!(|id| async move {
-        music_data::artist::load_artist_with_associated_data(id.to_string())
+        crate::load_artist_with_associated_data(id.to_string())
             .await
             .unwrap()
     }));
 
     let playlists_by_id =
-        use_context::<Resource<music_data::MusicItemsById<music_data::playlist::PlayList>>>();
+        use_context::<Resource<models::MusicItemsById<models::playlist::PlayList>>>();
 
     let track_ids_in_playlists: HashSet<String> = playlists_by_id
         .read_unchecked()
@@ -62,12 +62,12 @@ pub fn ArtistComp(id: String) -> Element {
                                 "Artist: "
                                 span { class: "value",
 
-
+            
 
                                     "{artist_data.artists_by_id.get(&id).map(|artist| &artist.name).unwrap_or(&\"Unknown Artist\".to_string())}"
                                 }
                             }
-
+            
                             div { class: "mt-[1em] md:mt-[2em]",
                                 h2 { "Tracks:" }
                                 if filtered_track_ids.is_empty() {

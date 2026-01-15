@@ -1,23 +1,23 @@
 use crate::components;
-use crate::music_data;
-use crate::music_data::MusicItemCollection;
-use crate::music_data::playlist::PlaylistCollection;
+use playlist_core::models;
+use playlist_core::models::MusicItemCollection;
+use playlist_core::models::playlist::PlaylistCollection;
 use crate::views::track::TrackListComp;
 use dioxus::prelude::*;
 
 #[component]
 pub fn PlaylistComp(id: String) -> Element {
     let playlist_data_resource = use_resource(use_reactive!(|id| async move {
-        music_data::playlist::load_playlist_with_associated_data(id.to_string())
+        crate::load_playlist_with_associated_data(id.to_string())
             .await
             .unwrap()
     }));
 
     let playlists_by_id =
-        use_context::<Resource<music_data::MusicItemsById<music_data::playlist::PlayList>>>();
+        use_context::<Resource<models::MusicItemsById<models::playlist::PlayList>>>();
 
     let compilers_by_id =
-        use_context::<Resource<music_data::MusicItemsById<music_data::compiler::Compiler>>>();
+        use_context::<Resource<models::MusicItemsById<models::compiler::Compiler>>>();
 
     rsx! {
         div { class: "max-w-full lg:w-6xl mx-auto",
@@ -30,15 +30,15 @@ pub fn PlaylistComp(id: String) -> Element {
                     Some(playlist_data) => rsx! {
                         h1 {
 
-
+        
 
                             "Playlist: "
                             span { class: "value", "{playlist_data.playlist.name}" }
                         }
                         div { class: "flex flex-col md:flex-row gap-[0.3em] md:gap-[2em] md:items-center",
-
+        
                             div { class: "flex",
-
+        
                                 match playlist_data.playlist.date {
                                     Some(date) => rsx! {
                                         h6 { "Date:" }
@@ -84,7 +84,7 @@ pub fn PlaylistComp(id: String) -> Element {
                                 }
                             }
                         }
-
+        
                         match &playlist_data.playlist.notes {
                             Some(notes) => rsx! {
                                 div { class: "max-h-[6em] overflow-y-auto [mask-image:linear-gradient(to_bottom,black_calc(100%-1.5em),transparent)]",
@@ -93,7 +93,7 @@ pub fn PlaylistComp(id: String) -> Element {
                             },
                             None => rsx! {},
                         }
-
+        
                         div { class: "mt-[1em] md:mt-[2em]",
                             TrackListComp {
                                 track_ids: playlist_data.playlist.track_ids.clone(),
@@ -112,11 +112,11 @@ pub fn PlaylistComp(id: String) -> Element {
 
 #[component]
 pub fn PlaylistListComp(
-    playlists: music_data::MusicItemsById<music_data::playlist::PlayList>,
+    playlists: models::MusicItemsById<models::playlist::PlayList>,
     hide_compiler: bool,
 ) -> Element {
     let compilers_by_id =
-        use_context::<Resource<music_data::MusicItemsById<music_data::compiler::Compiler>>>();
+        use_context::<Resource<models::MusicItemsById<models::compiler::Compiler>>>();
 
     rsx! {
         table { class: "playlist-list",
@@ -129,7 +129,7 @@ pub fn PlaylistListComp(
                     }
                     th { class: "hidden lg:table-cell", "Length" }
                     th { class: "collapse", "Icons" }
-
+                
                 }
             }
             tbody {
@@ -178,7 +178,7 @@ pub fn PlaylistListComp(
                         td { components::IconsAndLinks {} }
                     }
                 }
-
+            
             }
         }
     }

@@ -1,0 +1,15 @@
+[package]
+name = "playlist-cli"
+version = "0.1.0"
+authors = ["Oliver Coleman <oliver.coleman@gmail.com>"]
+edition = "2024"
+
+[[bin]]
+name = "playlist-cli"
+path = "src/main.rs"
+
+[dependencies]
+playlist-core = { path = "../core", features = ["server"] }
+tokio = { workspace = true, features = ["macros"] }
+mongodb = { workspace = true }
+futures = { workspace = true }

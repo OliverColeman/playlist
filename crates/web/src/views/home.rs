@@ -1,14 +1,14 @@
 use dioxus::prelude::*;
 
 use crate::components;
-use crate::music_data;
+use playlist_core::models;
 use crate::views::playlist::PlaylistListComp;
 
 /// The Home page component that will be rendered when the current route is `[Route::Home]`
 #[component]
 pub fn Home() -> Element {
     let playlists_by_id =
-        use_context::<Resource<music_data::MusicItemsById<music_data::playlist::PlayList>>>();
+        use_context::<Resource<models::MusicItemsById<models::playlist::PlayList>>>();
 
     rsx! {
         div { class: "text-center mb-[2em]",
