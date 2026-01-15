@@ -98,6 +98,7 @@ pub fn PlaylistComp(id: String) -> Element {
                             TrackListComp {
                                 track_ids: playlist_data.playlist.track_ids.clone(),
                                 tracks_by_id: playlist_data.tracks_by_id.clone(),
+                                linked_tracks: playlist_data.linked_tracks.clone(),
                                 artists_by_id: playlist_data.artists_by_id.clone(),
                                 albums_by_id: playlist_data.albums_by_id.clone(),
                             }

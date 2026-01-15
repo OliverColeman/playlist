@@ -25,8 +25,19 @@ crate::define_music_item_struct_with_common_fields!(Track, "Track", {
     appears_in_play_list_groups: Vec<String>,
 });
 
+/// A linked track document is used to group different versions of the same track.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkedTrack {
+    #[serde(rename = "_id")]
+    pub id: String,
+    pub track_name_normalised_strong: String,
+    pub track_ids: Vec<String>,
+    pub artist_ids: Vec<String>,
+}
+
 #[cfg(feature = "server")]
-async fn load_linked_tracks(query: bson::Document) -> Result<Vec<LinkedTrack>, ServerFnError> {
+pub async fn load_linked_tracks(query: bson::Document) -> Result<Vec<LinkedTrack>, ServerFnError> {
     use crate::server::ServerError;
     use futures::stream::TryStreamExt;
 
@@ -51,17 +62,6 @@ async fn load_linked_tracks(query: bson::Document) -> Result<Vec<LinkedTrack>, S
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     Ok(linked_tracks)
-}
-
-/// A linked track document is used to group different versions of the same track.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LinkedTrack {
-    #[serde(rename = "_id")]
-    pub id: String,
-    pub track_name_normalised_strong: String,
-    pub track_ids: Vec<String>,
-    pub artist_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

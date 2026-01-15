@@ -121,10 +121,21 @@ pub fn TrackComp(id: String) -> Element {
                         }
 
                         div { class: "mt-[1em] md:mt-[2em]",
-                            h2 { "Other versions of this track:" }
+                            h2 { "All versions of this track:" }
                             TrackListComp {
                                 track_ids: track_data.linked_tracks_by_id.keys().cloned().collect(),
                                 tracks_by_id: Some(track_data.linked_tracks_by_id.clone()),
+                                linked_tracks: Some(
+                                    track_data
+                                        .linked_tracks_by_id
+                                        .values()
+                                        .map(|t| {
+                                            let mut set = HashSet::new();
+                                            set.insert(t.id.clone());
+                                            set
+                                        })
+                                        .collect(),
+                                ),
                                 artists_by_id: Some(track_data.artists_by_id.clone()),
                                 albums_by_id: Some(track_data.albums_by_id.clone()),
                             }
@@ -217,15 +228,17 @@ pub fn TrackListComp(
                                     title: "How many playlists this track appears in / Most recent playlist containing this track",
                                     match &*playlists_by_id.read_unchecked() {
                                         Some(playlists_map) => {
-                                            let empty_set = HashSet::new();
-                                            let linked_tracks_for_this_track = linked_tracks
-
-                                                .as_ref()
-                                                .unwrap_or(&vec![empty_set.clone(); 0])
-                                                .iter()
-                                                .find(|lt_set| lt_set.contains(&track.id))
-                                                .cloned()
-                                                .unwrap_or(empty_set);
+                                            let singular_set = HashSet::from([track.id.clone()]);
+                                            let linked_tracks_for_this_track = match linked_tracks.as_ref() {
+                                                Some(lt_vec) => {
+                                                    lt_vec
+                                                        .iter()
+                                                        .find(|lt_set| lt_set.contains(&track.id))
+                                                        .cloned()
+                                                        .unwrap_or(singular_set.clone())
+                                                }
+                                                None => singular_set.clone(),
+                                            };
                                             let matching_playlists: Vec<_> = playlists_map
                                                 .sorted_by_date(-1)
                                                 .into_iter()

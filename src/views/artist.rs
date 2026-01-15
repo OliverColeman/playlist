@@ -62,6 +62,8 @@ pub fn ArtistComp(id: String) -> Element {
                                 "Artist: "
                                 span { class: "value",
 
+
+
                                     "{artist_data.artists_by_id.get(&id).map(|artist| &artist.name).unwrap_or(&\"Unknown Artist\".to_string())}"
                                 }
                             }
@@ -78,6 +80,7 @@ pub fn ArtistComp(id: String) -> Element {
                                     TrackListComp {
                                         track_ids: filtered_track_ids,
                                         tracks_by_id: Some(artist_data.tracks_by_id.clone()),
+                                        linked_tracks: Some(artist_data.linked_tracks.clone()),
                                         artists_by_id: Some(artist_data.artists_by_id.clone()),
                                         albums_by_id: Some(artist_data.albums_by_id.clone()),
                                     }

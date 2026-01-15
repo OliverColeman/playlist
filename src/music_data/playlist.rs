@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::music_data::artist::Artist;
 use crate::music_data::track::Track;
@@ -85,6 +85,7 @@ pub async fn load_playlists() -> Result<Vec<PlayList>, crate::ServerFnError> {
 pub struct PlayListWithAssociatedData {
     pub playlist: PlayList,
     pub tracks_by_id: HashMap<String, Track>,
+    pub linked_tracks: Vec<HashSet<String>>,
     pub artists_by_id: HashMap<String, Artist>,
     pub albums_by_id: HashMap<String, Album>,
 }
@@ -93,6 +94,8 @@ pub struct PlayListWithAssociatedData {
 pub async fn load_playlist_with_associated_data(
     playlist_id: String,
 ) -> Result<PlayListWithAssociatedData, ServerFnError> {
+    use crate::music_data::track::load_linked_tracks;
+
     let playlist = crate::music_data::server::load_items::<PlayList>(
         bson::doc! { "_id": playlist_id.clone() },
     )
@@ -108,6 +111,20 @@ pub async fn load_playlist_with_associated_data(
     .await?;
     let tracks_by_id: HashMap<String, Track> =
         tracks.into_iter().map(|t| (t.id.clone(), t)).collect();
+
+    let linked_tracks: Vec<HashSet<String>> = load_linked_tracks(
+        bson::doc! {"trackIds": { "$in": tracks_by_id.keys().cloned().collect::<Vec<_>>() }},
+    )
+    .await?
+    .into_iter()
+    .map(|linked_track| {
+        linked_track
+            .track_ids
+            .into_iter()
+            .collect::<HashSet<String>>()
+    })
+    .collect();
+
     let mut artist_ids: Vec<String> = Vec::new();
     let mut album_ids: Vec<String> = Vec::new();
     for track_id in track_ids.iter() {
@@ -139,6 +156,7 @@ pub async fn load_playlist_with_associated_data(
     Ok(PlayListWithAssociatedData {
         playlist,
         tracks_by_id,
+        linked_tracks,
         artists_by_id,
         albums_by_id,
     })

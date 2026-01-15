@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::music_data::album::Album;
 use crate::music_data::track::Track;
@@ -14,6 +14,7 @@ crate::define_music_item_struct_with_common_fields!(Artist, "Artist", {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArtistWithAssociatedData {
     pub tracks_by_id: HashMap<String, Track>,
+    pub linked_tracks: Vec<HashSet<String>>,
     pub artists_by_id: HashMap<String, Artist>,
     pub albums_by_id: HashMap<String, Album>,
 }
@@ -22,6 +23,8 @@ pub struct ArtistWithAssociatedData {
 pub async fn load_artist_with_associated_data(
     artist_id: String,
 ) -> Result<ArtistWithAssociatedData, ServerFnError> {
+    use crate::music_data::track::load_linked_tracks;
+
     // Load all tracks by this artist
     let tracks = crate::music_data::server::load_items::<Track>(bson::doc! {
         "artistIds": artist_id.clone()
@@ -39,6 +42,19 @@ pub async fn load_artist_with_associated_data(
             artist_id
         )));
     }
+
+    let linked_tracks: Vec<HashSet<String>> = load_linked_tracks(
+        bson::doc! {"trackIds": { "$in": tracks_by_id.keys().cloned().collect::<Vec<_>>() }},
+    )
+    .await?
+    .into_iter()
+    .map(|linked_track| {
+        linked_track
+            .track_ids
+            .into_iter()
+            .collect::<HashSet<String>>()
+    })
+    .collect();
 
     // Load all artists for these tracks
     let artist_ids: Vec<String> = tracks_by_id
@@ -80,6 +96,7 @@ pub async fn load_artist_with_associated_data(
 
     Ok(ArtistWithAssociatedData {
         tracks_by_id,
+        linked_tracks,
         artists_by_id,
         albums_by_id,
     })
