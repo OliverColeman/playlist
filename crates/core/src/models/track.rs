@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use crate::models::album::Album;
 use crate::models::artist::Artist;
 
-crate::define_music_item_struct_with_common_fields!(Track, "Track", {
+crate::define_music_item_struct_with_common_fields!(Track, "track", {
     #[serde(default)]
     artist_ids: Vec<String>,
 
@@ -13,17 +13,10 @@ crate::define_music_item_struct_with_common_fields!(Track, "Track", {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     duration: Option<f64>,
-
-    #[serde(default)]
-    appears_in_play_lists: Vec<String>,
-
-    #[serde(default)]
-    appears_in_play_list_groups: Vec<String>,
 });
 
 /// A linked track document is used to group different versions of the same track.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct LinkedTrack {
     #[serde(rename = "_id")]
     pub id: String,
@@ -33,26 +26,22 @@ pub struct LinkedTrack {
 }
 
 #[cfg(feature = "server")]
-pub async fn load_linked_tracks(query: mongodb::bson::Document) -> Result<Vec<LinkedTrack>, crate::database::ServerError> {
+pub async fn load_linked_tracks(
+    query: mongodb::bson::Document,
+) -> Result<Vec<LinkedTrack>, crate::database::ServerError> {
     use futures::stream::TryStreamExt;
 
     let database = crate::get_database().await?;
-    let collection: mongodb::Collection<LinkedTrack> = database.collection("LinkedTrack");
+    let collection: mongodb::Collection<LinkedTrack> = database.collection("linked_track");
 
     // Create index for track_ids queries (won't hurt if it already exists)
     let index_model = mongodb::IndexModel::builder()
         .keys(mongodb::bson::doc! {"track_ids": 1})
         .build();
-    collection
-        .create_index(index_model)
-        .await?;
+    collection.create_index(index_model).await?;
 
-    let cursor = collection
-        .find(query)
-        .await?;
-    let linked_tracks: Vec<LinkedTrack> = cursor
-        .try_collect()
-        .await?;
+    let cursor = collection.find(query).await?;
+    let linked_tracks: Vec<LinkedTrack> = cursor.try_collect().await?;
     Ok(linked_tracks)
 }
 

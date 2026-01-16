@@ -31,12 +31,14 @@ pub async fn load_compilers() -> Result<Vec<Compiler>, ServerFnError> {
 /// Load all playlists
 #[get("/api/playlists")]
 pub async fn load_playlists() -> Result<Vec<PlayList>, ServerFnError> {
+    tracing::info!("Loading all playlists");
     use mongodb::bson;
     use playlist_core::models::server::load_items;
 
     let playlists = load_items::<PlayList>(bson::doc! {})
         .await
         .map_err(to_server_error)?;
+    tracing::info!("Loaded {} playlists", playlists.len());
     Ok(playlists)
 }
 
@@ -138,7 +140,7 @@ pub async fn load_artist_with_associated_data(
 
     // Load all tracks by this artist
     let tracks = load_items::<Track>(bson::doc! {
-        "artistIds": artist_id.clone()
+        "artist_ids": artist_id.clone()
     })
     .await
     .map_err(to_server_error)?;
@@ -156,7 +158,7 @@ pub async fn load_artist_with_associated_data(
     }
 
     let linked_tracks: Vec<HashSet<String>> =
-        load_linked_tracks(bson::doc! {"artistIds": artist_id.clone()})
+        load_linked_tracks(bson::doc! {"artist_ids": artist_id.clone()})
             .await
             .map_err(to_server_error)?
             .into_iter()
@@ -215,7 +217,7 @@ pub async fn load_track_with_associated_data(
     use playlist_core::models::track::load_linked_tracks;
 
     // Load the "linked tracks" document to get the different versions of the same track, if any
-    let linked_tracks_docs = load_linked_tracks(bson::doc! {"trackIds": &track_id})
+    let linked_tracks_docs = load_linked_tracks(bson::doc! {"track_ids": &track_id})
         .await
         .map_err(to_server_error)?;
     let linked_tracks_doc = linked_tracks_docs.into_iter().next();
@@ -291,7 +293,7 @@ pub async fn load_popular_tracks() -> Result<PopularTracksData, ServerFnError> {
 
     // Get all JD playlists
     let playlists =
-        load_items::<PlayList>(bson::doc! {"groupId": playlist_core::models::JD_GROUP_ID})
+        load_items::<PlayList>(bson::doc! {"group_id": playlist_core::models::JD_GROUP_ID})
             .await
             .map_err(to_server_error)?;
 

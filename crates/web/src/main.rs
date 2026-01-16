@@ -108,6 +108,7 @@ fn App() -> Element {
             .await
             .inspect_err(|e| tracing::error!("Failed to load playlists: {:?}", e))
             .unwrap_or_default();
+        trace!("Loaded {} playlists", items.len());
         playlist_core::models::MusicItemsById::from(items)
     });
     use_context_provider(move || playlists);

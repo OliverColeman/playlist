@@ -1,11 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::models::album::Album;
 use crate::models::artist::Artist;
 use crate::models::track::Track;
-use crate::models::album::Album;
 use serde::{Deserialize, Serialize};
 
-crate::define_music_item_struct_with_common_fields!(PlayList, "PlayList", {
+crate::define_music_item_struct_with_common_fields!(PlayList, "playlist", {
     #[serde(default)]
     compiler_ids: Vec<String>,
 

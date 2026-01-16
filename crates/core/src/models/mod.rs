@@ -8,7 +8,6 @@ pub mod track;
 pub const JD_GROUP_ID: &str = "zmWKoBuAoSLCWDvzn";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ImageUrls {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub small: Option<String>,
@@ -43,7 +42,6 @@ pub trait MusicItem: MusicItemBase + Clone {}
 macro_rules! define_music_item_struct_with_common_fields {
     ($name:ident, $collection_name:expr, { $($(#[$attr:meta])* $field_name:ident : $field_type:ty),* $(,)? }) => {
         #[derive(Debug, Clone, Serialize, Deserialize)]
-        #[serde(rename_all = "camelCase")]
         pub struct $name {
             #[serde(rename = "_id")]
             pub id: String,
