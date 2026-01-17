@@ -1,3 +1,4 @@
+use rand::Rng;
 use std::env::VarError;
 
 #[derive(Debug)]
@@ -34,4 +35,16 @@ pub async fn get_database() -> Result<mongodb::Database, ServerError> {
     let client = mongodb::Client::with_uri_str(&config.db.connection_string).await?;
     let database = client.database(&config.db.db_name);
     Ok(database)
+}
+
+pub fn generate_id() -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    const ID_LEN: usize = 17;
+    let mut rng = rand::rng();
+    (0..ID_LEN)
+        .map(|_| {
+            let idx = rng.random_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect()
 }

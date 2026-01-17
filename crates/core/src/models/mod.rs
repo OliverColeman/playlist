@@ -23,7 +23,7 @@ pub trait MusicItemBase {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn name_normalised(&self) -> &str;
-    fn name_normalised_strong(&self) -> Option<&str>;
+    fn name_normalised_strong(&self) -> &str;
     fn disambiguation(&self) -> Option<&str>;
     fn notes(&self) -> Option<&str>;
     fn data_maybe_missing(&self) -> Option<&[String]>;
@@ -52,8 +52,7 @@ macro_rules! define_music_item_struct_with_common_fields {
             pub name_normalised: String,
 
             /// Used for LinkedT matching (from normaliseStringStrong)
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub name_normalised_strong: Option<String>,
+            pub name_normalised_strong: String,
 
             #[serde(skip_serializing_if = "Option::is_none")]
             pub disambiguation: Option<String>,
@@ -100,7 +99,7 @@ macro_rules! define_music_item_struct_with_common_fields {
             fn id(&self) -> &str { &self.id }
             fn name(&self) -> &str { &self.name }
             fn name_normalised(&self) -> &str { &self.name_normalised }
-            fn name_normalised_strong(&self) -> Option<&str> { self.name_normalised_strong.as_deref() }
+            fn name_normalised_strong(&self) -> &str { &self.name_normalised_strong }
             fn disambiguation(&self) -> Option<&str> { self.disambiguation.as_deref() }
             fn notes(&self) -> Option<&str> { self.notes.as_deref() }
             fn data_maybe_missing(&self) -> Option<&[String]> { self.data_maybe_missing.as_deref() }
