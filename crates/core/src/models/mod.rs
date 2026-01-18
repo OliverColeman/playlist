@@ -32,8 +32,8 @@ pub trait MusicItemBase {
     fn image_urls(&self) -> Option<&ImageUrls>;
     fn spotify_id(&self) -> Option<&str>;
     fn mb_id(&self) -> Option<&str>;
-    fn soundex(&self) -> &[String];
-    fn double_metaphone(&self) -> Option<&[String]>;
+    fn name_double_metaphone_codes(&self) -> &[String];
+    fn name_n_grams(&self) -> &[String];
 }
 
 pub trait MusicItem: MusicItemBase + Clone {}
@@ -85,11 +85,9 @@ macro_rules! define_music_item_struct_with_common_fields {
             #[serde(skip_serializing_if = "Option::is_none")]
             pub mb_id: Option<String>,
 
-            #[serde(default)]
-            pub soundex: Vec<String>,
+            pub name_double_metaphone_codes: Vec<String>,
 
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub double_metaphone: Option<Vec<String>>,
+            pub name_n_grams: Vec<String>,
 
             $($(#[$attr])* pub $field_name: $field_type,)*
         }
@@ -108,8 +106,8 @@ macro_rules! define_music_item_struct_with_common_fields {
             fn image_urls(&self) -> Option<&crate::models::ImageUrls> { self.image_urls.as_ref() }
             fn spotify_id(&self) -> Option<&str> { self.spotify_id.as_deref() }
             fn mb_id(&self) -> Option<&str> { self.mb_id.as_deref() }
-            fn soundex(&self) -> &[String] { &self.soundex }
-            fn double_metaphone(&self) -> Option<&[String]> { self.double_metaphone.as_deref() }
+            fn name_double_metaphone_codes(&self) -> &[String] { &self.name_double_metaphone_codes }
+            fn name_n_grams(&self) -> &[String] { &self.name_n_grams }
         }
 
         impl PartialEq for $name {
@@ -176,10 +174,11 @@ pub mod server {
             .keys(bson::doc! {"name_normalised": 1})
             .build();
         collection.create_index(index_model).await?;
+
         Ok(())
     }
 
-    pub async fn load_items<T>(filter: bson::Document) -> Result<Vec<T>, ServerError>
+    pub async fn load_music_items<T>(filter: bson::Document) -> Result<Vec<T>, ServerError>
     where
         T: crate::models::MusicItem + Send + Sync + Unpin + for<'de> serde::Deserialize<'de>,
     {

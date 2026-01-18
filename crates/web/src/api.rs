@@ -20,9 +20,9 @@ pub use playlist_core::models::{
 #[get("/api/compilers")]
 pub async fn load_compilers() -> Result<Vec<Compiler>, ServerFnError> {
     use mongodb::bson;
-    use playlist_core::models::server::load_items;
+    use playlist_core::models::server::load_music_items;
 
-    let result = load_items::<Compiler>(bson::doc! {})
+    let result = load_music_items::<Compiler>(bson::doc! {})
         .await
         .map_err(to_server_error)?;
     Ok(result)
@@ -31,14 +31,12 @@ pub async fn load_compilers() -> Result<Vec<Compiler>, ServerFnError> {
 /// Load all playlists
 #[get("/api/playlists")]
 pub async fn load_playlists() -> Result<Vec<PlayList>, ServerFnError> {
-    tracing::info!("Loading all playlists");
     use mongodb::bson;
-    use playlist_core::models::server::load_items;
+    use playlist_core::models::server::load_music_items;
 
-    let playlists = load_items::<PlayList>(bson::doc! {})
+    let playlists = load_music_items::<PlayList>(bson::doc! {})
         .await
         .map_err(to_server_error)?;
-    tracing::info!("Loaded {} playlists", playlists.len());
     Ok(playlists)
 }
 
@@ -48,11 +46,11 @@ pub async fn load_playlist_with_associated_data(
     playlist_id: String,
 ) -> Result<PlayListWithAssociatedData, ServerFnError> {
     use mongodb::bson;
-    use playlist_core::models::server::load_items;
+    use playlist_core::models::server::load_music_items;
     use playlist_core::models::track::load_linked_tracks;
 
     // Load the playlist
-    let playlists = load_items::<PlayList>(bson::doc! {"_id": &playlist_id})
+    let playlists = load_music_items::<PlayList>(bson::doc! {"_id": &playlist_id})
         .await
         .map_err(to_server_error)?;
     let playlist = playlists
@@ -62,7 +60,7 @@ pub async fn load_playlist_with_associated_data(
 
     // Load the tracks
     let tracks_by_id = if !playlist.track_ids.is_empty() {
-        load_items::<Track>(bson::doc! {
+        load_music_items::<Track>(bson::doc! {
             "_id": {"$in": &playlist.track_ids}
         })
         .await
@@ -95,7 +93,7 @@ pub async fn load_playlist_with_associated_data(
     }
 
     let artists_by_id = if !artist_ids.is_empty() {
-        load_items::<Artist>(bson::doc! {
+        load_music_items::<Artist>(bson::doc! {
             "_id": {"$in": artist_ids.into_iter().collect::<Vec<String>>()}
         })
         .await
@@ -108,7 +106,7 @@ pub async fn load_playlist_with_associated_data(
     };
 
     let albums_by_id = if !album_ids.is_empty() {
-        load_items::<Album>(bson::doc! {
+        load_music_items::<Album>(bson::doc! {
             "_id": {"$in": album_ids.into_iter().collect::<Vec<String>>()}
         })
         .await
@@ -135,11 +133,11 @@ pub async fn load_artist_with_associated_data(
     artist_id: String,
 ) -> Result<ArtistWithAssociatedData, ServerFnError> {
     use mongodb::bson;
-    use playlist_core::models::server::load_items;
+    use playlist_core::models::server::load_music_items;
     use playlist_core::models::track::load_linked_tracks;
 
     // Load all tracks by this artist
-    let tracks = load_items::<Track>(bson::doc! {
+    let tracks = load_music_items::<Track>(bson::doc! {
         "artist_ids": artist_id.clone()
     })
     .await
@@ -181,7 +179,7 @@ pub async fn load_artist_with_associated_data(
         }
     }
 
-    let artists_by_id = load_items::<Artist>(bson::doc! {
+    let artists_by_id = load_music_items::<Artist>(bson::doc! {
         "_id": {"$in": artist_ids.clone()}
     })
     .await
@@ -190,7 +188,7 @@ pub async fn load_artist_with_associated_data(
     .map(|artist| (artist.id.clone(), artist))
     .collect::<HashMap<String, Artist>>();
 
-    let albums_by_id = load_items::<Album>(bson::doc! {
+    let albums_by_id = load_music_items::<Album>(bson::doc! {
         "_id": {"$in": album_ids.clone()}
     })
     .await
@@ -213,7 +211,7 @@ pub async fn load_track_with_associated_data(
     track_id: String,
 ) -> Result<TrackWithAssociatedData, ServerFnError> {
     use mongodb::bson;
-    use playlist_core::models::server::load_items;
+    use playlist_core::models::server::load_music_items;
     use playlist_core::models::track::load_linked_tracks;
 
     // Load the "linked tracks" document to get the different versions of the same track, if any
@@ -228,7 +226,7 @@ pub async fn load_track_with_associated_data(
         None => vec![track_id],
     };
 
-    let linked_tracks_by_id = load_items::<Track>(bson::doc! {
+    let linked_tracks_by_id = load_music_items::<Track>(bson::doc! {
         "_id": {"$in": track_ids.clone()}
     })
     .await
@@ -259,7 +257,7 @@ pub async fn load_track_with_associated_data(
             }
         }
     }
-    let artists_by_id = load_items::<Artist>(bson::doc! {
+    let artists_by_id = load_music_items::<Artist>(bson::doc! {
         "_id": {"$in": artist_ids.clone()}
     })
     .await
@@ -268,7 +266,7 @@ pub async fn load_track_with_associated_data(
     .map(|artist| (artist.id.clone(), artist))
     .collect::<HashMap<String, Artist>>();
 
-    let albums_by_id = load_items::<Album>(bson::doc! {
+    let albums_by_id = load_music_items::<Album>(bson::doc! {
         "_id": {"$in": album_ids.clone()}
     })
     .await
@@ -288,12 +286,12 @@ pub async fn load_track_with_associated_data(
 #[get("/api/tracks/popular")]
 pub async fn load_popular_tracks() -> Result<PopularTracksData, ServerFnError> {
     use mongodb::bson;
-    use playlist_core::models::server::load_items;
+    use playlist_core::models::server::load_music_items;
     use playlist_core::models::track::load_linked_tracks;
 
     // Get all JD playlists
     let playlists =
-        load_items::<PlayList>(bson::doc! {"group_id": playlist_core::models::JD_GROUP_ID})
+        load_music_items::<PlayList>(bson::doc! {"group_id": playlist_core::models::JD_GROUP_ID})
             .await
             .map_err(to_server_error)?;
 
@@ -301,22 +299,35 @@ pub async fn load_popular_tracks() -> Result<PopularTracksData, ServerFnError> {
     let linked_tracks = load_linked_tracks(bson::doc! {})
         .await
         .map_err(to_server_error)?;
-    // Create a map from every linked track id to all the track ids linked to it
+
+    // Create a map from track id to LinkedTrack, for all tracks that appear in linked tracks
     let mut linked_tracks_map: HashMap<String, &LinkedTrack> = HashMap::new();
     for linked_track in &linked_tracks {
         for track_id in &linked_track.track_ids {
+            // Assert that we don't have duplicate linked track entries
+            if linked_tracks_map.contains_key(track_id) {
+                tracing::warn!(
+                    "Duplicate linked track entry for track ID {} in linked track ID {}",
+                    track_id,
+                    linked_track.id
+                );
+            }
             linked_tracks_map.insert(track_id.clone(), linked_track);
         }
     }
 
+    // Count occurrences of each track across all playlists
     let mut track_count_map: HashMap<String, usize> = HashMap::new();
     for playlist in playlists {
-        for track_id in playlist.track_ids {
+        // Don't count duplicate track IDs within the same playlist
+        let unique_track_ids: HashSet<String> = playlist.track_ids.iter().cloned().collect();
+        for track_id in unique_track_ids {
             *track_count_map.entry(track_id).or_insert(0) += 1;
         }
     }
 
     // Sort all tracks by popularity, ignoring linked versions for now
+    // This allows using the most popular version as the "main" version later when including linked tracks
     let mut all_track_count_sorted: Vec<(String, usize)> =
         track_count_map.clone().into_iter().collect();
     all_track_count_sorted.sort_by(|a, b| a.1.cmp(&b.1));
@@ -345,7 +356,7 @@ pub async fn load_popular_tracks() -> Result<PopularTracksData, ServerFnError> {
         .collect::<Vec<String>>();
 
     // Load the tracks
-    let tracks_by_id: HashMap<String, Track> = load_items::<Track>(bson::doc! {
+    let tracks_by_id: HashMap<String, Track> = load_music_items::<Track>(bson::doc! {
         "_id": {"$in": sorted_track_ids.clone()}
     })
     .await
@@ -367,7 +378,7 @@ pub async fn load_popular_tracks() -> Result<PopularTracksData, ServerFnError> {
     }
 
     let artists_by_id = if !artist_ids.is_empty() {
-        load_items::<Artist>(bson::doc! {
+        load_music_items::<Artist>(bson::doc! {
             "_id": {"$in": artist_ids.into_iter().collect::<Vec<String>>()}
         })
         .await
@@ -380,7 +391,7 @@ pub async fn load_popular_tracks() -> Result<PopularTracksData, ServerFnError> {
     };
 
     let albums_by_id = if !album_ids.is_empty() {
-        load_items::<Album>(bson::doc! {
+        load_music_items::<Album>(bson::doc! {
             "_id": {"$in": album_ids.into_iter().collect::<Vec<String>>()}
         })
         .await

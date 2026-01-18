@@ -1,10 +1,12 @@
 use std::env::VarError;
 
+#[derive(Debug, Clone)]
 pub struct MongodbConfig {
     pub connection_string: String,
     pub db_name: String,
 }
 
+#[derive(Debug, Clone)]
 pub struct Config {
     pub db: MongodbConfig,
 }

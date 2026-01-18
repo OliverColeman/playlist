@@ -31,13 +31,16 @@ fn remove_multiple_spaces_and_trim(s: &str) -> String {
 }
 
 pub fn normalise_name(s: &str) -> String {
+    let s = deunicode::deunicode(&s);
     let s = s.to_lowercase();
     let s = remove_punctuation(&s);
     remove_multiple_spaces_and_trim(&s)
 }
 
 pub fn normalise_name_strong(s: &str) -> String {
+    let s = deunicode::deunicode(&s);
     let s = s.to_lowercase().trim().to_string();
+
     // Remove anything in brackets, except for brackets at the start
     let s = {
         let re_brackets = regex::Regex::new(r"(\([^)]*\)|\[[^\]]*\]|<[^>]*>)").unwrap();
@@ -82,3 +85,94 @@ pub fn normalise_name_strong(s: &str) -> String {
 
     remove_multiple_spaces_and_trim(&s)
 }
+
+/** Returns an array containing the primary and secondary Double Metaphone codes for each word in the given string.
+ * Only strings normalised with [`normalise_name`] should be passed. */
+pub fn generate_double_metaphone_codes(s: &str) -> Vec<String> {
+    use rphonetic::{DoubleMetaphone, Encoder};
+    let double_metaphone = DoubleMetaphone::default();
+    let mut codes = Vec::new();
+    for word in s.split_whitespace() {
+        // Known bad word
+        if word == "ll" {
+            continue;
+        }
+
+        // Catch panics from the rphonetic library
+        let result = std::panic::catch_unwind(|| {
+            let primary = double_metaphone.encode(word);
+            let secondary = double_metaphone.encode_alternate(word);
+            (primary, secondary)
+        });
+
+        match result {
+            Ok((primary, secondary)) => {
+                if !primary.is_empty() && !codes.contains(&primary) {
+                    codes.push(primary);
+                }
+                if !secondary.is_empty() && !codes.contains(&secondary) {
+                    codes.push(secondary);
+                }
+            }
+            Err(error) => {
+                println!(
+                    "Double Metaphone: failed for word: '{}'. Error: {:?}",
+                    word, error
+                );
+            }
+        }
+    }
+    codes
+}
+
+/** Generates n-grams from the given string.
+ * Only strings normalised with [`normalise_name`] should be passed. */
+pub fn generate_n_grams(s: &str) -> Vec<String> {
+    static MIN_SIZE: usize = 2;
+    static MAX_SIZE: usize = 3;
+    let mut ngrams = Vec::new();
+    for word in s.split_whitespace() {
+        let chars: Vec<char> = word.chars().collect();
+        for n in MIN_SIZE..=MAX_SIZE {
+            if chars.len() >= n {
+                for i in 0..=(chars.len() - n) {
+                    let ngram: String = chars[i..i + n].iter().collect();
+                    if !ngrams.contains(&ngram) {
+                        ngrams.push(ngram);
+                    }
+                }
+            }
+        }
+    }
+    ngrams
+}
+
+// /**
+//  * Returns an array containing the SoundEx codes for each word in the given string.
+//  * The words are stemmed using the Porter stemmer first.
+//  */
+// const soundex = (str) => _.uniqBy(str.split(/\s+/).map(w => sdx(stemmer(w))));
+
+// /**
+//  * Returns an array containing the primary and secondary Double Metaphone codes for each word in the given string.
+//  * The words are stemmed using the Porter stemmer first.
+//  */
+// const doubleMetaphone = (str) => _.uniqBy(_.flatten(str.split(/\s+/).map(w => dblmp(stemmer(w))))).filter(v => v.length > 0);
+
+// /**
+//  * Used by fuzzy matching/search. Query the specified collection for the given soundex and double metaphone codes.
+//  * Optionally provide additional selectors.
+//  */
+// const findBySoundexOrDoubleMetaphone = (collection, name, andSelectors, orSelectors, options) => {
+//   andSelectors = andSelectors || {};
+//   orSelectors = orSelectors ? (Array.isArray(orSelectors) ? orSelectors : [orSelectors]) : [];
+
+//   return collection.find({
+//     $or: [
+//       { soundex: { $in: soundex(name) } },
+//       { doubleMetaphone: {$in: doubleMetaphone(name) } },
+//       ...orSelectors,
+//     ],
+//     ...andSelectors
+//   }, options);
+// }

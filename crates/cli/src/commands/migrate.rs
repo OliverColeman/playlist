@@ -19,8 +19,18 @@ static FIELDS_TO_REMOVE: [&str; 4] = [
 pub async fn update_collection_and_field_names(
     database: Database,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use playlist_core::{normalise_name, normalise_name_strong};
+    use playlist_core::models::album::Album;
+    use playlist_core::models::artist::Artist;
+    use playlist_core::models::compiler::Compiler;
+    use playlist_core::models::playlist::PlayList;
+    use playlist_core::models::track::Track;
 
+    use playlist_core::models::server::load_music_items;
+    use playlist_core::{
+        generate_double_metaphone_codes, generate_n_grams, normalise_name, normalise_name_strong,
+    };
+
+    // This ordering is important: some computed fields from earlier collections are used in later collections
     let collection_names = vec!["Album", "Artist", "Compiler", "PlayList", "Track"];
 
     for old_collection_name in collection_names {
@@ -52,17 +62,110 @@ pub async fn update_collection_and_field_names(
                 }
             }
 
-            // Add/update normalised name fields using current normalisation functions
-            new_doc.insert(
-                "name_normalised",
-                normalise_name(doc.get_str("name").unwrap_or("")),
-            );
+            // Add/update normalised name fields using current implementations
+            let name_normalised = normalise_name(doc.get_str("name").unwrap_or(""));
+            new_doc.insert("name_normalised", name_normalised.clone());
             new_doc.insert(
                 "name_normalised_strong",
                 normalise_name_strong(doc.get_str("name").unwrap_or("")),
             );
+            // Add/update search fields
+            new_doc.insert(
+                "name_double_metaphone_codes",
+                generate_double_metaphone_codes(name_normalised.as_str()),
+            );
+            new_doc.insert("name_n_grams", generate_n_grams(name_normalised.as_str()));
 
-            new_collection.insert_one(new_doc).await?;
+            if new_collection_name == "playlist" {
+                // For playlists, add search fields for all the compiler names
+                let mut double_metaphone_codes = HashSet::<String>::new();
+                let mut n_grams = HashSet::<String>::new();
+                let compiler_ids = new_doc.get_array("compiler_ids").unwrap_or(&vec![]).clone();
+                let compiler_names_normalised = load_music_items::<Compiler>(mongodb::bson::doc! {
+                    "_id": { "$in": compiler_ids }
+                })
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|c| c.name_normalised)
+                .collect::<Vec<String>>();
+                for compiler_name_normalised in compiler_names_normalised {
+                    for code in generate_double_metaphone_codes(compiler_name_normalised.as_str()) {
+                        double_metaphone_codes.insert(code);
+                    }
+                    for n_gram in generate_n_grams(compiler_name_normalised.as_str()) {
+                        n_grams.insert(n_gram);
+                    }
+                }
+                new_doc.insert(
+                    "compiler_names_double_metaphone_codes",
+                    double_metaphone_codes.into_iter().collect::<Vec<String>>(),
+                );
+                new_doc.insert(
+                    "compiler_names_n_grams",
+                    n_grams.into_iter().collect::<Vec<String>>(),
+                );
+            }
+
+            if new_collection_name == "track" {
+                // For tracks, add search fields for all the artist names
+                let mut double_metaphone_codes = HashSet::<String>::new();
+                let mut n_grams = HashSet::<String>::new();
+                let artist_names_normalised = load_music_items::<Artist>(mongodb::bson::doc! {
+                    "_id": new_doc.get_array("artist_ids").unwrap_or(&vec![]).clone()
+                })
+                .await?
+                .into_iter()
+                .map(|a| a.name_normalised)
+                .collect::<Vec<String>>();
+                for artist_name_normalised in artist_names_normalised {
+                    for code in generate_double_metaphone_codes(artist_name_normalised.as_str()) {
+                        double_metaphone_codes.insert(code);
+                    }
+                    for n_gram in generate_n_grams(artist_name_normalised.as_str()) {
+                        n_grams.insert(n_gram);
+                    }
+                }
+                new_doc.insert(
+                    "artist_names_double_metaphone_codes",
+                    double_metaphone_codes.into_iter().collect::<Vec<String>>(),
+                );
+                new_doc.insert(
+                    "artist_names_n_grams",
+                    n_grams.into_iter().collect::<Vec<String>>(),
+                );
+            }
+
+            match new_collection_name.as_str() {
+                "album" => {
+                    let typed_doc: Album = mongodb::bson::from_document(new_doc.clone())?;
+                    let typed_collection = database.collection::<Album>(&new_collection_name);
+                    typed_collection.insert_one(typed_doc).await?;
+                }
+                "artist" => {
+                    let typed_doc: Artist = mongodb::bson::from_document(new_doc.clone())?;
+                    let typed_collection = database.collection::<Artist>(&new_collection_name);
+                    typed_collection.insert_one(typed_doc).await?;
+                }
+                "compiler" => {
+                    let typed_doc: Compiler = mongodb::bson::from_document(new_doc.clone())?;
+                    let typed_collection = database.collection::<Compiler>(&new_collection_name);
+                    typed_collection.insert_one(typed_doc).await?;
+                }
+                "track" => {
+                    let typed_doc: Track = mongodb::bson::from_document(new_doc.clone())?;
+                    let typed_collection = database.collection::<Track>(&new_collection_name);
+                    typed_collection.insert_one(typed_doc).await?;
+                }
+                "playlist" => {
+                    let typed_doc: PlayList = mongodb::bson::from_document(new_doc.clone())?;
+                    let typed_collection = database.collection::<PlayList>(&new_collection_name);
+                    typed_collection.insert_one(typed_doc).await?;
+                }
+                _ => {
+                    println!("Warning: Unknown collection name: {}.", new_collection_name);
+                }
+            }
         }
     }
 
@@ -77,13 +180,13 @@ struct LinkedTrackIntermediate {
 
 pub async fn build_linked_tracks(database: Database) -> Result<(), Box<dyn std::error::Error>> {
     println!("Building linked tracks...");
-    use playlist_core::models::server::load_items;
+    use playlist_core::models::server::load_music_items;
     use playlist_core::models::track::Track;
 
     let mut linked_tracks_by_name: std::collections::HashMap<String, Vec<LinkedTrackIntermediate>> =
         std::collections::HashMap::new();
 
-    let tracks = load_items::<Track>(mongodb::bson::doc! {}).await?;
+    let tracks = load_music_items::<Track>(mongodb::bson::doc! {}).await?;
     for track in tracks {
         let name_normalised_strong = track.name_normalised_strong.clone();
 

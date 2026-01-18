@@ -11,6 +11,8 @@ futures = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 regex = { workspace = true }
+rphonetic = { workspace = true }
+deunicode = "1.6"
 
 # Server-only dependencies
 mongodb = { workspace = true, optional = true }

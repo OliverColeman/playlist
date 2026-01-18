@@ -13,6 +13,9 @@ crate::define_music_item_struct_with_common_fields!(Track, "track", {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     duration: Option<f64>,
+
+    artist_names_double_metaphone_codes: Vec<String>,
+    artist_names_n_grams: Vec<String>,
 });
 
 /// A linked track document is used to group different versions of the same track.

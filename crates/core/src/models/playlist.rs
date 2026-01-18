@@ -32,6 +32,9 @@ crate::define_music_item_struct_with_common_fields!(PlayList, "playlist", {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     spotify_user_id: Option<String>,
+
+    compiler_names_double_metaphone_codes: Vec<String>,
+    compiler_names_n_grams: Vec<String>,
 });
 
 pub trait PlaylistCollection {
