@@ -14,4 +14,5 @@ pub mod home;
 pub mod navbar;
 pub mod playlist;
 pub mod popular;
+pub mod search;
 pub mod track;

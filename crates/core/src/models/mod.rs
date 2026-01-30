@@ -32,15 +32,20 @@ pub trait MusicItemBase {
     fn image_urls(&self) -> Option<&ImageUrls>;
     fn spotify_id(&self) -> Option<&str>;
     fn mb_id(&self) -> Option<&str>;
-    fn name_double_metaphone_codes(&self) -> &[String];
-    fn name_n_grams(&self) -> &[String];
+    fn search_terms(&self) -> &[String];
+    fn search_double_metaphone_codes(&self) -> &[String];
+    fn search_n_grams(&self) -> &[String];
 }
 
 pub trait MusicItem: MusicItemBase + Clone {}
 
 #[macro_export]
 macro_rules! define_music_item_struct_with_common_fields {
-    ($name:ident, $collection_name:expr, { $($(#[$attr:meta])* $field_name:ident : $field_type:ty),* $(,)? }) => {
+    (
+        $name:ident,
+        $collection_name:expr,
+        { $($(#[$attr:meta])* $field_name:ident : $field_type:ty),* $(,)? }
+    ) => {
         #[derive(Debug, Clone, Serialize, Deserialize)]
         pub struct $name {
             #[serde(rename = "_id")]
@@ -51,7 +56,7 @@ macro_rules! define_music_item_struct_with_common_fields {
             /// Normalized version of the name (from normaliseString)
             pub name_normalised: String,
 
-            /// Used for LinkedT matching (from normaliseStringStrong)
+            /// Used for LinkedTrack matching (from normaliseStringStrong)
             pub name_normalised_strong: String,
 
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -85,9 +90,9 @@ macro_rules! define_music_item_struct_with_common_fields {
             #[serde(skip_serializing_if = "Option::is_none")]
             pub mb_id: Option<String>,
 
-            pub name_double_metaphone_codes: Vec<String>,
-
-            pub name_n_grams: Vec<String>,
+            pub search_terms: Vec<String>,
+            pub search_double_metaphone_codes: Vec<String>,
+            pub search_n_grams: Vec<String>,
 
             $($(#[$attr])* pub $field_name: $field_type,)*
         }
@@ -106,8 +111,9 @@ macro_rules! define_music_item_struct_with_common_fields {
             fn image_urls(&self) -> Option<&crate::models::ImageUrls> { self.image_urls.as_ref() }
             fn spotify_id(&self) -> Option<&str> { self.spotify_id.as_deref() }
             fn mb_id(&self) -> Option<&str> { self.mb_id.as_deref() }
-            fn name_double_metaphone_codes(&self) -> &[String] { &self.name_double_metaphone_codes }
-            fn name_n_grams(&self) -> &[String] { &self.name_n_grams }
+            fn search_double_metaphone_codes(&self) -> &[String] { &self.search_double_metaphone_codes }
+            fn search_n_grams(&self) -> &[String] { &self.search_n_grams }
+            fn search_terms(&self) -> &[String] { &self.search_terms }
         }
 
         impl PartialEq for $name {

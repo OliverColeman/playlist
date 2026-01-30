@@ -13,3 +13,4 @@ playlist-core = { path = "../core", features = ["server"] }
 futures = { workspace = true }
 mongodb = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
+serde = { workspace = true, features = ["derive"] }

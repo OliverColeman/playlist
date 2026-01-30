@@ -4,19 +4,19 @@ use std::collections::{HashMap, HashSet};
 use crate::models::album::Album;
 use crate::models::artist::Artist;
 
-crate::define_music_item_struct_with_common_fields!(Track, "track", {
-    #[serde(default)]
-    artist_ids: Vec<String>,
+crate::define_music_item_struct_with_common_fields!(
+    Track, "track",
+    {
+        #[serde(default)]
+        artist_ids: Vec<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    album_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        album_id: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    duration: Option<f64>,
-
-    artist_names_double_metaphone_codes: Vec<String>,
-    artist_names_n_grams: Vec<String>,
-});
+        #[serde(skip_serializing_if = "Option::is_none")]
+        duration: Option<f64>,
+    }
+);
 
 /// A linked track document is used to group different versions of the same track.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,7 +56,7 @@ pub struct TrackWithAssociatedData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PopularTracksData {
+pub struct TrackListWithAssociatedData {
     pub sorted_track_ids: Vec<String>,
     pub tracks_by_id: HashMap<String, Track>,
     pub linked_tracks: Vec<HashSet<String>>,

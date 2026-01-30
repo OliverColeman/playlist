@@ -5,37 +5,37 @@ use crate::models::artist::Artist;
 use crate::models::track::Track;
 use serde::{Deserialize, Serialize};
 
-crate::define_music_item_struct_with_common_fields!(PlayList, "playlist", {
-    #[serde(default)]
-    compiler_ids: Vec<String>,
+crate::define_music_item_struct_with_common_fields!(
+    PlayList, "playlist",
+    {
+        #[serde(default)]
+        compiler_ids: Vec<String>,
 
-    #[serde(default)]
-    track_ids: Vec<String>,
+        #[serde(default)]
+        track_ids: Vec<String>,
 
-    #[serde(default)]
-    duration: f64,
+        #[serde(default)]
+        duration: f64,
 
-    user_id: String,
+        user_id: String,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    group_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        group_id: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tag_ids: Option<Vec<String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        tag_ids: Option<Vec<String>>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    number: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        number: Option<u64>,
 
-    /// Unix timestamp
-    #[serde(skip_serializing_if = "Option::is_none")]
-    date: Option<f64>,
+        /// Unix timestamp
+        #[serde(skip_serializing_if = "Option::is_none")]
+        date: Option<f64>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    spotify_user_id: Option<String>,
-
-    compiler_names_double_metaphone_codes: Vec<String>,
-    compiler_names_n_grams: Vec<String>,
-});
+        #[serde(skip_serializing_if = "Option::is_none")]
+        spotify_user_id: Option<String>,
+    }
+);
 
 pub trait PlaylistCollection {
     fn sorted_by_date(&self, direction: i8) -> Vec<PlayList>;

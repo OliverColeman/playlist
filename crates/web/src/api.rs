@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 // Helper function to convert core errors to ServerFnError (server only)
@@ -13,7 +14,7 @@ pub use playlist_core::models::{
     artist::{Artist, ArtistWithAssociatedData},
     compiler::Compiler,
     playlist::{PlayList, PlayListWithAssociatedData},
-    track::{LinkedTrack, PopularTracksData, Track, TrackWithAssociatedData},
+    track::{LinkedTrack, Track, TrackListWithAssociatedData, TrackWithAssociatedData},
 };
 
 /// Load all compilers
@@ -284,10 +285,12 @@ pub async fn load_track_with_associated_data(
 
 /// Load popular tracks
 #[get("/api/tracks/popular")]
-pub async fn load_popular_tracks() -> Result<PopularTracksData, ServerFnError> {
+pub async fn load_popular_tracks() -> Result<TrackListWithAssociatedData, ServerFnError> {
     use mongodb::bson;
     use playlist_core::models::server::load_music_items;
     use playlist_core::models::track::load_linked_tracks;
+
+    tracing::info!("Loading popular tracks");
 
     // Get all JD playlists
     let playlists =
@@ -355,15 +358,203 @@ pub async fn load_popular_tracks() -> Result<PopularTracksData, ServerFnError> {
         .map(|(id, _)| id.clone())
         .collect::<Vec<String>>();
 
-    // Load the tracks
-    let tracks_by_id: HashMap<String, Track> = load_music_items::<Track>(bson::doc! {
-        "_id": {"$in": sorted_track_ids.clone()}
+    let linked_tracks = sorted_track_ids
+        .iter()
+        .map(|track_id| {
+            linked_tracks_map
+                .get(track_id)
+                .map(|lt| lt.track_ids.iter().cloned().collect())
+                .unwrap_or_else(|| HashSet::from([track_id.clone()]))
+        })
+        .collect();
+
+    let track_data =
+        get_track_list_with_associated_data(sorted_track_ids, None, Some(linked_tracks)).await?;
+
+    Ok(track_data)
+}
+
+/// Search music items
+#[get("/api/search?search_terms")]
+pub async fn do_search(search_terms: String) -> Result<SearchResults, ServerFnError> {
+    use playlist_core::{generate_double_metaphone_codes, generate_n_grams, normalise_name};
+
+    let search_terms_normalised = normalise_name(&search_terms);
+    let search_double_metaphone_codes = generate_double_metaphone_codes(&search_terms);
+    let search_n_grams = generate_n_grams(&search_terms_normalised);
+
+    tracing::info!(
+        "Search terms: '{}', normalised: '{}', n-grams: {:?}, double metaphone codes: {:?}",
+        search_terms,
+        search_terms_normalised,
+        search_n_grams,
+        search_double_metaphone_codes
+    );
+
+    let track_scores = search_music_items::<Track>(
+        &search_terms_normalised,
+        &search_double_metaphone_codes,
+        &search_n_grams,
+    )
+    .await?;
+
+    let sorted_track_ids = track_scores
+        .clone()
+        .into_iter()
+        .map(|(track, _)| track.id.clone())
+        .collect::<Vec<String>>();
+
+    let tracks = get_track_list_with_associated_data(
+        sorted_track_ids,
+        Some(
+            track_scores
+                .iter()
+                .map(|(track, _)| track.clone())
+                .collect(),
+        ),
+        None,
+    )
+    .await?;
+    Ok(SearchResults { tracks })
+}
+
+#[cfg(feature = "server")]
+async fn search_music_items<T>(
+    search_terms_normalised: &str,
+    search_double_metaphone_codes: &[String],
+    search_n_grams: &[String],
+) -> Result<Vec<(T, usize)>, ServerFnError>
+where
+    T: playlist_core::models::MusicItem + Send + Sync + Unpin + for<'de> serde::Deserialize<'de>,
+{
+    use fuzzt::algorithms::normalized_damerau_levenshtein;
+    use mongodb::bson;
+    use playlist_core::models::server::load_music_items;
+
+    let items: Vec<T> = load_music_items::<T>(bson::doc! {
+        "$or": [
+            { "search_double_metaphone_codes": { "$in": search_double_metaphone_codes } },
+            { "search_n_grams": { "$in": search_n_grams } },
+        ]
     })
     .await
-    .map_err(to_server_error)?
-    .into_iter()
-    .map(|track| (track.id.clone(), track))
-    .collect();
+    .map_err(to_server_error)?;
+
+    tracing::info!(
+        "Found {} candidate items for search terms '{}'",
+        items.len(),
+        search_terms_normalised
+    );
+
+    let search_terms_unique: HashSet<&str> = search_terms_normalised.split_whitespace().collect();
+
+    let mut item_scores = items
+        .iter()
+        .map(move |item| {
+            // Find the best score for each search term against any of this item's terms
+            let terms_score = search_terms_unique
+                .iter()
+                .map(|search_term| {
+                    item.search_terms()
+                        .iter()
+                        .map(|item_term| normalized_damerau_levenshtein(search_term, item_term))
+                        .fold(0.0, |a: f64, b: f64| a.max(b))
+                })
+                .sum::<f64>()
+                / (search_terms_unique.len() as f64);
+
+            let wholename_score =
+                normalized_damerau_levenshtein(search_terms_normalised, item.name_normalised());
+
+            let score: usize = (terms_score * 80.0 + wholename_score * 20.0) as usize;
+
+            (item.clone(), score)
+        })
+        .collect::<Vec<(T, usize)>>();
+
+    item_scores.sort_by(|a, b| b.1.cmp(&a.1));
+    item_scores.truncate(10);
+
+    let search_terms_unique: HashSet<&str> = search_terms_normalised.split_whitespace().collect();
+    item_scores.clone().iter().for_each(|(item, score)| {
+        let item_terms_unique = item.search_terms();
+
+        tracing::info!("item_terms_unique: '{:?}'", item_terms_unique);
+
+        // Find the best score for each search term against any of this item's terms
+        search_terms_unique
+            .iter()
+            .map(|search_term| {
+                let item_terms_scores = item_terms_unique
+                    .iter()
+                    .map(|item_term| normalized_damerau_levenshtein(search_term, item_term))
+                    .collect::<Vec<f64>>();
+                let best_score = item_terms_scores
+                    .iter()
+                    .fold(0.0, |a: f64, b: &f64| a.max(*b));
+                tracing::info!(
+                    "  search_term: '{}', item_terms_scores: '{:?}', best_score: {}",
+                    search_term,
+                    item_terms_scores,
+                    best_score
+                );
+            })
+            .for_each(drop);
+
+        let wholename_score =
+            normalized_damerau_levenshtein(search_terms_normalised, item.name_normalised());
+        tracing::info!("  wholename_score: {}", wholename_score);
+        tracing::info!("  total score: {}", score);
+    });
+
+    Ok(item_scores)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchResults {
+    pub tracks: TrackListWithAssociatedData,
+}
+
+#[cfg(feature = "server")]
+pub async fn get_track_list_with_associated_data(
+    sorted_track_ids: Vec<String>,
+    tracks: Option<Vec<Track>>,
+    linked_tracks: Option<Vec<HashSet<String>>>,
+) -> Result<TrackListWithAssociatedData, ServerFnError> {
+    use mongodb::bson;
+    use playlist_core::models::server::load_music_items;
+    use playlist_core::models::track::load_linked_tracks;
+
+    let tracks = match tracks {
+        Some(t) => {
+            let track_ids_set: HashSet<String> = sorted_track_ids.iter().cloned().collect();
+            // Only include tracks that are in sorted_track_ids
+            t.into_iter()
+                .filter(|track| track_ids_set.contains(&track.id))
+                .collect()
+        }
+        None => load_music_items::<Track>(bson::doc! {
+            "_id": {"$in": sorted_track_ids.clone()}
+        })
+        .await
+        .map_err(to_server_error)?,
+    };
+
+    let tracks_by_id: HashMap<String, Track> = tracks
+        .into_iter()
+        .map(|track| (track.id.clone(), track))
+        .collect();
+
+    // Check that we found all tracks
+    if tracks_by_id.len() != sorted_track_ids.len() {
+        let found_ids: HashSet<String> = tracks_by_id.keys().cloned().collect();
+        let missing_ids: Vec<String> = sorted_track_ids
+            .iter()
+            .filter(|id| !found_ids.contains(*id))
+            .cloned()
+            .collect();
+        tracing::warn!("Some tracks not found: {:?}", missing_ids);
+    }
 
     // Load all artists and albums for these tracks
     let mut artist_ids: HashSet<String> = HashSet::new();
@@ -403,17 +594,35 @@ pub async fn load_popular_tracks() -> Result<PopularTracksData, ServerFnError> {
         HashMap::new()
     };
 
-    let linked_tracks = sorted_track_ids
-        .iter()
-        .map(|track_id| {
-            linked_tracks_map
-                .get(track_id)
-                .map(|lt| lt.track_ids.iter().cloned().collect())
-                .unwrap_or_else(|| HashSet::from([track_id.clone()]))
-        })
-        .collect();
+    let linked_tracks = match linked_tracks {
+        Some(linked_tracks_map) => linked_tracks_map,
+        None => {
+            let linked_tracks_docs = load_linked_tracks(bson::doc! {
+                "track_ids": {"$in": &sorted_track_ids}
+            })
+            .await
+            .map_err(to_server_error)?;
 
-    Ok(PopularTracksData {
+            let mut linked_tracks_map: HashMap<String, &LinkedTrack> = HashMap::new();
+            for linked_track in &linked_tracks_docs {
+                for track_id in &linked_track.track_ids {
+                    linked_tracks_map.insert(track_id.clone(), linked_track);
+                }
+            }
+
+            sorted_track_ids
+                .iter()
+                .map(|track_id| {
+                    linked_tracks_map
+                        .get(track_id)
+                        .map(|lt| lt.track_ids.iter().cloned().collect())
+                        .unwrap_or_else(|| HashSet::from([track_id.clone()]))
+                })
+                .collect()
+        }
+    };
+
+    Ok(TrackListWithAssociatedData {
         sorted_track_ids,
         tracks_by_id,
         linked_tracks,

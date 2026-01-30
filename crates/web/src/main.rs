@@ -9,6 +9,7 @@ use views::home::Home;
 use views::navbar::Navbar;
 use views::playlist::PlaylistComp;
 use views::popular::PopularTracksComp;
+use views::search::SearchComp;
 use views::track::TrackComp;
 
 mod api;
@@ -45,6 +46,8 @@ enum Route {
         ArtistComp { id: String },
         #[route("/popular")]
         PopularTracksComp {},
+        #[route("/search")]
+        SearchComp {},
 }
 
 // We can import assets in dioxus with the `asset!` macro. This macro takes a path to an asset relative to the crate root.

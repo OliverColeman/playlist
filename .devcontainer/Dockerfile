@@ -58,7 +58,7 @@ ENV HOME=/home/$USERNAME
 # Install Rust and Cargo tools
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="$HOME/.cargo/bin:${PATH}"
-RUN curl -sSL https://dioxus.dev/install.sh | bash -s -- v0.7.2
+RUN curl -sSL https://dioxus.dev/install.sh | bash -s -- v0.7.3
 RUN rustup target add wasm32-unknown-unknown
 
 # Setup Zsh with Antidote, config files are copied in postCreateCommand in devcontainer.json
