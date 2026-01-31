@@ -3,7 +3,6 @@ use crate::views::playlist::PlaylistListComp;
 use dioxus::prelude::*;
 use playlist_core::models;
 use playlist_core::models::MusicItemCollection;
-use playlist_core::models::playlist;
 use playlist_core::models::playlist::PlaylistCollection;
 
 #[component]
@@ -19,22 +18,20 @@ pub fn CompilerComp(id: String) -> Element {
         None => None,
     };
 
-    let playlists_for_compiler: Option<Vec<playlist::PlayList>> =
-        match &*playlists_by_id.read_unchecked() {
+    let playlist_ids_for_compiler: Option<Vec<String>> = match &*playlists_by_id.read_unchecked() {
+        None => None,
+        Some(playlists) => match compiler {
             None => None,
-            Some(playlists) => match compiler {
-                None => None,
-                Some(compiler) => Some(
-                    playlists
-                        .sorted_by_date(-1)
-                        .iter()
-                        .filter(|pl| pl.compiler_ids.contains(&compiler.id))
-                        .cloned()
-                        .collect::<Vec<playlist::PlayList>>()
-                        .into(),
-                ),
-            },
-        };
+            Some(compiler) => Some(
+                playlists
+                    .sorted_by_date(-1)
+                    .iter()
+                    .filter(|pl| pl.compiler_ids.contains(&compiler.id))
+                    .map(|pl| pl.id.clone())
+                    .collect(),
+            ),
+        },
+    };
 
     rsx! {
 
@@ -54,12 +51,9 @@ pub fn CompilerComp(id: String) -> Element {
 
                 h2 { "Playlists:" }
 
-                match &playlists_for_compiler {
-                    Some(playlists) => rsx! {
-                        PlaylistListComp {
-                            playlists: models::MusicItemsById::from(playlists.clone()),
-                            hide_compiler: true,
-                        }
+                match &playlist_ids_for_compiler {
+                    Some(playlist_ids) => rsx! {
+                        PlaylistListComp { playlist_ids: playlist_ids.clone(), hide_compiler: true }
                     },
                     None => rsx! {
                         components::Loading {}
@@ -71,7 +65,7 @@ pub fn CompilerComp(id: String) -> Element {
 }
 
 #[component]
-pub fn CompilerListComp() -> Element {
+pub fn CompilerListComp(compiler_ids: Option<Vec<String>>) -> Element {
     let compilers_by_id =
         use_context::<Resource<models::MusicItemsById<models::compiler::Compiler>>>();
     let playlists_by_id =
@@ -100,48 +94,59 @@ pub fn CompilerListComp() -> Element {
     rsx! {
         div { class: "lg:w-4xl mx-auto",
             div {
-                h1 { "Playlist Compilers" }
                 match &*compilers_by_id.read_unchecked() {
-                    Some(compilers) => rsx! {
-                        table {
-                            thead {
-                                tr {
-                                    for header in headers.iter() {
-                                        th { "{header}" }
+                    Some(compilers) => {
+                        let compilers = match &compiler_ids {
+                            Some(ids) => {
+                                ids.iter()
+                                    .filter_map(|id| compilers.get(id))
+                                    .cloned()
+                                    .collect::<Vec<models::compiler::Compiler>>()
+                            }
+                            None => compilers.sorted_by_name_normalised(1),
+                        };
+
+                        rsx! {
+                            table {
+                                thead {
+                                    tr {
+                                        for header in headers.iter() {
+                                            th { "{header}" }
+                                        }
                                     }
                                 }
-                            }
-                            tbody {
-                                for compiler in compilers.sorted_by_name_normalised(1).into_iter() {
-                                    tr { key: "{compiler.id}",
-                                        td { class: "w-1/4 md:w-3xs",
-                                            Link { to: "/compiler/{compiler.id}", "{compiler.name}" }
-                                        }
-                                        td {
-                                            match &playlists_by_compiler {
-                                                Some(map) => {
-                                                    match map.get(&compiler.id) {
-                                                        Some(playlists) => rsx! {
-                                                            for playlist in playlists.iter() {
-                                                                Link { key: "{playlist.id}", to: "/playlist/{playlist.id}", "{playlist.name} " }
-                                                            }
-                                                        },
-                                                        None => rsx! {
-                                                            span { "<Nada>" }
-                                                        },
-                                                    }
-                                                }
-                                                None => rsx! {
-                                                    span { components::Loading {} }
-                                                },
+                                tbody {
+                                    for compiler in compilers.iter() {
+                                        tr { key: "{compiler.id}",
+                                            td { class: "w-1/4 md:w-3xs",
+                                                Link { to: "/compiler/{compiler.id}", "{compiler.name}" }
                                             }
+                                            td {
+                                                match &playlists_by_compiler {
+                                                    Some(map) => {
+                                                        match map.get(&compiler.id) {
+                                                            Some(playlists) => rsx! {
+                                                                for playlist in playlists.iter() {
+                                                                    Link { key: "{playlist.id}", to: "/playlist/{playlist.id}", "{playlist.name} " }
+                                                                }
+                                                            },
+                                                            None => rsx! {
+                                                                span { "<Nada>" }
+                                                            },
+                                                        }
+                                                    }
+                                                    None => rsx! {
+                                                        span { components::Loading {} }
+                                                    },
+                                                }
+                                            }
+                                            td { components::IconsAndLinks {} }
                                         }
-                                        td { components::IconsAndLinks {} }
                                     }
                                 }
                             }
                         }
-                    },
+                    }
                     None => rsx! {
                         h1 { components::Loading {} }
                     },

@@ -293,10 +293,9 @@ pub async fn load_popular_tracks() -> Result<TrackListWithAssociatedData, Server
     tracing::info!("Loading popular tracks");
 
     // Get all JD playlists
-    let playlists =
-        load_music_items::<PlayList>(bson::doc! {"group_id": playlist_core::models::JD_GROUP_ID})
-            .await
-            .map_err(to_server_error)?;
+    let playlists = load_music_items::<PlayList>(bson::doc! {})
+        .await
+        .map_err(to_server_error)?;
 
     // Load all LinkedTrack documents
     let linked_tracks = load_linked_tracks(bson::doc! {})
@@ -374,6 +373,14 @@ pub async fn load_popular_tracks() -> Result<TrackListWithAssociatedData, Server
     Ok(track_data)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchResults {
+    pub tracks: TrackListWithAssociatedData,
+    pub artists: Vec<Artist>,
+    pub compiler_ids: Vec<String>,
+    pub playlist_ids: Vec<String>,
+}
+
 /// Search music items
 #[get("/api/search?search_terms")]
 pub async fn do_search(search_terms: String) -> Result<SearchResults, ServerFnError> {
@@ -391,31 +398,58 @@ pub async fn do_search(search_terms: String) -> Result<SearchResults, ServerFnEr
         search_double_metaphone_codes
     );
 
-    let track_scores = search_music_items::<Track>(
+    let tracks = search_music_items::<Track>(
         &search_terms_normalised,
         &search_double_metaphone_codes,
         &search_n_grams,
     )
     .await?;
 
-    let sorted_track_ids = track_scores
-        .clone()
-        .into_iter()
-        .map(|(track, _)| track.id.clone())
+    let sorted_track_ids = tracks
+        .iter()
+        .map(|track| track.id.clone())
         .collect::<Vec<String>>();
 
     let tracks = get_track_list_with_associated_data(
         sorted_track_ids,
-        Some(
-            track_scores
-                .iter()
-                .map(|(track, _)| track.clone())
-                .collect(),
-        ),
+        Some(tracks.iter().map(|track| track.clone()).collect()),
         None,
     )
     .await?;
-    Ok(SearchResults { tracks })
+
+    let artists = search_music_items::<Artist>(
+        &search_terms_normalised,
+        &search_double_metaphone_codes,
+        &search_n_grams,
+    )
+    .await?;
+
+    let compiler_ids: Vec<String> = search_music_items::<Compiler>(
+        &search_terms_normalised,
+        &search_double_metaphone_codes,
+        &search_n_grams,
+    )
+    .await?
+    .iter()
+    .map(|compiler| compiler.id.clone())
+    .collect();
+
+    let playlist_ids: Vec<String> = search_music_items::<PlayList>(
+        &search_terms_normalised,
+        &search_double_metaphone_codes,
+        &search_n_grams,
+    )
+    .await?
+    .iter()
+    .map(|playlist| playlist.id.clone())
+    .collect();
+
+    Ok(SearchResults {
+        tracks,
+        artists,
+        compiler_ids,
+        playlist_ids,
+    })
 }
 
 #[cfg(feature = "server")]
@@ -423,7 +457,7 @@ async fn search_music_items<T>(
     search_terms_normalised: &str,
     search_double_metaphone_codes: &[String],
     search_n_grams: &[String],
-) -> Result<Vec<(T, usize)>, ServerFnError>
+) -> Result<Vec<T>, ServerFnError>
 where
     T: playlist_core::models::MusicItem + Send + Sync + Unpin + for<'de> serde::Deserialize<'de>,
 {
@@ -473,46 +507,47 @@ where
         .collect::<Vec<(T, usize)>>();
 
     item_scores.sort_by(|a, b| b.1.cmp(&a.1));
-    item_scores.truncate(10);
+    item_scores.truncate(50);
+    item_scores = item_scores
+        .into_iter()
+        .filter(|(_item, score)| *score > 50)
+        .collect();
 
-    let search_terms_unique: HashSet<&str> = search_terms_normalised.split_whitespace().collect();
-    item_scores.clone().iter().for_each(|(item, score)| {
-        let item_terms_unique = item.search_terms();
+    // let search_terms_unique: HashSet<&str> = search_terms_normalised.split_whitespace().collect();
+    // item_scores.clone().iter().for_each(|(item, score)| {
+    //     let item_terms_unique = item.search_terms();
 
-        tracing::info!("item_terms_unique: '{:?}'", item_terms_unique);
+    //     tracing::info!("item_terms_unique: '{:?}'", item_terms_unique);
 
-        // Find the best score for each search term against any of this item's terms
-        search_terms_unique
-            .iter()
-            .map(|search_term| {
-                let item_terms_scores = item_terms_unique
-                    .iter()
-                    .map(|item_term| normalized_damerau_levenshtein(search_term, item_term))
-                    .collect::<Vec<f64>>();
-                let best_score = item_terms_scores
-                    .iter()
-                    .fold(0.0, |a: f64, b: &f64| a.max(*b));
-                tracing::info!(
-                    "  search_term: '{}', item_terms_scores: '{:?}', best_score: {}",
-                    search_term,
-                    item_terms_scores,
-                    best_score
-                );
-            })
-            .for_each(drop);
+    //     // Find the best score for each search term against any of this item's terms
+    //     search_terms_unique
+    //         .iter()
+    //         .map(|search_term| {
+    //             let item_terms_scores = item_terms_unique
+    //                 .iter()
+    //                 .map(|item_term| normalized_damerau_levenshtein(search_term, item_term))
+    //                 .collect::<Vec<f64>>();
+    //             let best_score = item_terms_scores
+    //                 .iter()
+    //                 .fold(0.0, |a: f64, b: &f64| a.max(*b));
+    //             tracing::info!(
+    //                 "  search_term: '{}', item_terms_scores: '{:?}', best_score: {}",
+    //                 search_term,
+    //                 item_terms_scores,
+    //                 best_score
+    //             );
+    //         })
+    //         .for_each(drop);
 
-        let wholename_score =
-            normalized_damerau_levenshtein(search_terms_normalised, item.name_normalised());
-        tracing::info!("  wholename_score: {}", wholename_score);
-        tracing::info!("  total score: {}", score);
-    });
+    //     let wholename_score =
+    //         normalized_damerau_levenshtein(search_terms_normalised, item.name_normalised());
+    //     tracing::info!("  wholename_score: {}", wholename_score);
+    //     tracing::info!("  total score: {}", score);
+    // });
 
-    Ok(item_scores)
-}
+    let result = item_scores.into_iter().map(|(item, _)| item).collect();
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchResults {
-    pub tracks: TrackListWithAssociatedData,
+    Ok(result)
 }
 
 #[cfg(feature = "server")]

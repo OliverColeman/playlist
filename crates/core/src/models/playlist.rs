@@ -41,9 +41,9 @@ pub trait PlaylistCollection {
     fn sorted_by_date(&self, direction: i8) -> Vec<PlayList>;
 }
 
-impl PlaylistCollection for crate::models::MusicItemsById<PlayList> {
+impl PlaylistCollection for Vec<PlayList> {
     fn sorted_by_date(&self, direction: i8) -> Vec<PlayList> {
-        let mut items: Vec<PlayList> = self.by_id.values().cloned().collect();
+        let mut items: Vec<PlayList> = self.clone();
         items.sort_by(|a, b| {
             let a_date = a.date.unwrap_or(0.0);
             let b_date = b.date.unwrap_or(0.0);
@@ -54,6 +54,16 @@ impl PlaylistCollection for crate::models::MusicItemsById<PlayList> {
             }
         });
         items
+    }
+}
+
+impl PlaylistCollection for crate::models::MusicItemsById<PlayList> {
+    fn sorted_by_date(&self, direction: i8) -> Vec<PlayList> {
+        self.by_id
+            .values()
+            .cloned()
+            .collect::<Vec<PlayList>>()
+            .sorted_by_date(direction)
     }
 }
 

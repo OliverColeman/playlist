@@ -5,7 +5,6 @@ pub mod artist;
 pub mod compiler;
 pub mod playlist;
 pub mod track;
-pub const JD_GROUP_ID: &str = "zmWKoBuAoSLCWDvzn";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageUrls {
@@ -162,6 +161,15 @@ impl<T: MusicItem> From<Vec<T>> for MusicItemsById<T> {
             by_id.insert(item.id().to_string(), item);
         }
         MusicItemsById { by_id }
+    }
+}
+
+impl<T: MusicItem> From<MusicItemsById<T>> for Vec<T>
+where
+    T: crate::models::MusicItem,
+{
+    fn from(music_items_by_id: MusicItemsById<T>) -> Self {
+        music_items_by_id.by_id.values().cloned().collect()
     }
 }
 

@@ -9,7 +9,6 @@ pub fn PopularTracksComp() -> Element {
 
     rsx! {
         div { class: "max-w-full lg:w-6xl mx-auto",
-            h1 { "Top 100" }
             div {
                 match &*popular_tracks_resource.read_unchecked() {
                     None => rsx! {

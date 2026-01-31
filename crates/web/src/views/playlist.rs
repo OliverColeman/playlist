@@ -1,9 +1,9 @@
 use crate::components;
+use crate::views::track::TrackListComp;
+use dioxus::prelude::*;
 use playlist_core::models;
 use playlist_core::models::MusicItemCollection;
 use playlist_core::models::playlist::PlaylistCollection;
-use crate::views::track::TrackListComp;
-use dioxus::prelude::*;
 
 #[component]
 pub fn PlaylistComp(id: String) -> Element {
@@ -30,15 +30,13 @@ pub fn PlaylistComp(id: String) -> Element {
                     Some(playlist_data) => rsx! {
                         h1 {
 
-        
-
                             "Playlist: "
                             span { class: "value", "{playlist_data.playlist.name}" }
                         }
                         div { class: "flex flex-col md:flex-row gap-[0.3em] md:gap-[2em] md:items-center",
-        
+
                             div { class: "flex",
-        
+
                                 match playlist_data.playlist.date {
                                     Some(date) => rsx! {
                                         h6 { "Date:" }
@@ -84,7 +82,7 @@ pub fn PlaylistComp(id: String) -> Element {
                                 }
                             }
                         }
-        
+
                         match &playlist_data.playlist.notes {
                             Some(notes) => rsx! {
                                 div { class: "max-h-[6em] overflow-y-auto [mask-image:linear-gradient(to_bottom,black_calc(100%-1.5em),transparent)]",
@@ -93,7 +91,7 @@ pub fn PlaylistComp(id: String) -> Element {
                             },
                             None => rsx! {},
                         }
-        
+
                         div { class: "mt-[1em] md:mt-[2em]",
                             TrackListComp {
                                 track_ids: playlist_data.playlist.track_ids.clone(),
@@ -111,11 +109,11 @@ pub fn PlaylistComp(id: String) -> Element {
 }
 
 #[component]
-pub fn PlaylistListComp(
-    playlists: models::MusicItemsById<models::playlist::PlayList>,
-    hide_compiler: bool,
-) -> Element {
-    let compilers_by_id =
+pub fn PlaylistListComp(playlist_ids: Option<Vec<String>>, hide_compiler: bool) -> Element {
+    let playlists_by_id_resource =
+        use_context::<Resource<models::MusicItemsById<models::playlist::PlayList>>>();
+
+    let compilers_by_id_resource =
         use_context::<Resource<models::MusicItemsById<models::compiler::Compiler>>>();
 
     rsx! {
@@ -129,56 +127,75 @@ pub fn PlaylistListComp(
                     }
                     th { class: "hidden lg:table-cell", "Length" }
                     th { class: "collapse", "Icons" }
-                
+
                 }
             }
             tbody {
-                for playlist in playlists.sorted_by_date(-1).into_iter() {
-                    tr { key: "{playlist.id}",
-                        td {
-                            Link {
-                                class: "max-w-[7em] truncate text-ellipsis",
-                                to: "/playlist/{playlist.id}",
-                                title: "{playlist.name}",
-                                "{playlist.name}"
-                            }
+                match &*playlists_by_id_resource.read_unchecked() {
+                    None => rsx! {
+                        tr {
+                            td { components::Loading {} }
                         }
-                        td {
-                            match playlist.date {
-                                Some(date) => crate::util::format_date(date),
-                                None => "N/A".to_string(),
+                    },
+                    Some(playlists_by_id) => {
+                        let playlists: Vec<models::playlist::PlayList> = match &playlist_ids {
+                            Some(ids) => {
+                                ids.iter()
+                                    .filter_map(|id| playlists_by_id.get(id))
+                                    .cloned()
+                                    .collect()
                             }
-                        }
+                            None => playlists_by_id.sorted_by_date(-1),
+                        };
+                        rsx! {
+                            for playlist in playlists.into_iter() {
+                                tr { key: "{playlist.id}",
+                                    td {
+                                        Link {
+                                            class: "max-w-[7em] truncate text-ellipsis",
+                                            to: "/playlist/{playlist.id}",
+                                            title: "{playlist.name}",
+                                            "{playlist.name}"
+                                        }
+                                    }
+                                    td {
+                                        match playlist.date {
+                                            Some(date) => crate::util::format_date(date),
+                                            None => "N/A".to_string(),
+                                        }
+                                    }
 
-                        if !hide_compiler {
-                            td {
-                                match &*compilers_by_id.read_unchecked() {
-                                    Some(map) => {
-                                        rsx! {
-                                            for compiler_id in playlist.compiler_ids.iter() {
-                                                match map.get(compiler_id) {
-                                                    Some(compiler) => rsx! {
-                                                        Link { key: "{compiler.id}", to: "/compiler/{compiler.id}", "{compiler.name} " }
-                                                    },
-                                                    None => rsx! {},
+                                    if !hide_compiler {
+                                        td {
+                                            match &*compilers_by_id_resource.read_unchecked() {
+                                                Some(compilers_by_id) => {
+                                                    rsx! {
+                                                        for compiler_id in playlist.compiler_ids.iter() {
+                                                            match compilers_by_id.get(compiler_id) {
+                                                                Some(compiler) => rsx! {
+                                                                    Link { key: "{compiler.id}", to: "/compiler/{compiler.id}", "{compiler.name} " }
+                                                                },
+                                                                None => rsx! {},
+                                                            }
+                                                        }
+                                                    }
                                                 }
+                                                None => rsx! {
+                                                    span { components::Loading {} }
+                                                },
                                             }
                                         }
                                     }
-                                    None => rsx! {
-                                        span { components::Loading {} }
-                                    },
+                                    td { class: "hidden lg:table-cell",
+                                        "{crate::util::format_duration(playlist.duration)}, "
+                                        "{playlist.track_ids.len()} tracks"
+                                    }
+                                    td { components::IconsAndLinks {} }
                                 }
                             }
                         }
-                        td { class: "hidden lg:table-cell",
-                            "{crate::util::format_duration(playlist.duration)}, "
-                            "{playlist.track_ids.len()} tracks"
-                        }
-                        td { components::IconsAndLinks {} }
                     }
                 }
-            
             }
         }
     }

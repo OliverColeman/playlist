@@ -1,8 +1,9 @@
 use crate::components;
-use playlist_core::models;
-use playlist_core::models::playlist::PlaylistCollection;
 use crate::views::track::TrackListComp;
 use dioxus::prelude::*;
+use playlist_core::models;
+use playlist_core::models::artist::Artist;
+use playlist_core::models::playlist::PlaylistCollection;
 use std::collections::HashSet;
 
 #[component]
@@ -61,13 +62,10 @@ pub fn ArtistComp(id: String) -> Element {
                             h1 {
                                 "Artist: "
                                 span { class: "value",
-
-            
-
                                     "{artist_data.artists_by_id.get(&id).map(|artist| &artist.name).unwrap_or(&\"Unknown Artist\".to_string())}"
                                 }
                             }
-            
+
                             div { class: "mt-[1em] md:mt-[2em]",
                                 h2 { "Tracks:" }
                                 if filtered_track_ids.is_empty() {
@@ -87,6 +85,24 @@ pub fn ArtistComp(id: String) -> Element {
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn ArtistListComp(artists: Vec<Artist>) -> Element {
+    rsx! {
+        table { class: "table-fixed w-full",
+            tbody {
+                for artist in artists.iter() {
+                    tr { key: "{artist.id}",
+                        td {
+                            Link { to: format!("/artist/{}", artist.id), "{artist.name}" }
+                        }
+                        td { "TODO" }
                     }
                 }
             }

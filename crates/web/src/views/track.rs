@@ -1,14 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::components;
+use crate::views::playlist::PlaylistListComp;
+use dioxus::prelude::*;
 use playlist_core::models;
 use playlist_core::models::album::Album;
 use playlist_core::models::artist::Artist;
-use playlist_core::models::playlist;
 use playlist_core::models::playlist::PlaylistCollection;
 use playlist_core::models::track::Track;
-use crate::views::playlist::PlaylistListComp;
-use dioxus::prelude::*;
 
 #[component]
 pub fn TrackComp(id: String) -> Element {
@@ -21,7 +20,7 @@ pub fn TrackComp(id: String) -> Element {
     let playlists_by_id_resource =
         use_context::<Resource<models::MusicItemsById<models::playlist::PlayList>>>();
 
-    let playlists_for_track: Option<Vec<playlist::PlayList>> = match (
+    let playlist_ids_for_track: Option<Vec<String>> = match (
         &*playlists_by_id_resource.read_unchecked(),
         &*track_with_associated_data_resource.read_unchecked(),
     ) {
@@ -35,8 +34,8 @@ pub fn TrackComp(id: String) -> Element {
                         .values()
                         .any(|t| pl.track_ids.contains(&t.id))
                 })
-                .cloned()
-                .collect::<Vec<playlist::PlayList>>()
+                .map(|pl| pl.id.clone())
+                .collect::<Vec<String>>()
                 .into(),
         ),
         _ => None,
@@ -49,8 +48,6 @@ pub fn TrackComp(id: String) -> Element {
                     None => rsx! {
                         h1 {
                             "Track: "
-
-        
 
                             components::Loading {}
                         }
@@ -67,9 +64,7 @@ pub fn TrackComp(id: String) -> Element {
                                     span { class: "value", "{track.name}" }
                                 }
                                 div { class: "flex flex-col md:flex-row gap-[0.3em] md:gap-[2em] md:items-center",
-        
-                
-        
+
                                     div { class: "flex items-center",
                                         h6 { "Artist(s):" }
                                         div {
@@ -86,7 +81,7 @@ pub fn TrackComp(id: String) -> Element {
                                     div { class: "flex",
                                         h6 { "Album:" }
                                         div {
-                
+
                                             match &track_data.albums_by_id.get(&track.album_id.clone().unwrap_or_default()) {
                                                 Some(album) => rsx! { "{album.name}" },
                                                 None => rsx! { "-" },
@@ -95,21 +90,18 @@ pub fn TrackComp(id: String) -> Element {
                                     }
                                     div { class: "flex",
                                         h6 { "Length:" }
-                
+
                                         div { {crate::util::format_duration(track.duration.unwrap_or_default())} }
                                     }
                                 }
                             },
                         }
-        
+
                         div { class: "mt-[1em] md:mt-[2em]",
                             h2 { "Appears in playlists:" }
-                            match &playlists_for_track {
-                                Some(playlists) if !playlists.is_empty() => rsx! {
-                                    PlaylistListComp {
-                                        playlists: models::MusicItemsById::from(playlists.clone()),
-                                        hide_compiler: false,
-                                    }
+                            match &playlist_ids_for_track {
+                                Some(playlist_ids) if !playlist_ids.is_empty() => rsx! {
+                                    PlaylistListComp { playlist_ids: Some(playlist_ids.clone()), hide_compiler: false }
                                 },
                                 Some(_) => rsx! {
                                     p { "Nada" }
@@ -119,7 +111,7 @@ pub fn TrackComp(id: String) -> Element {
                                 },
                             }
                         }
-        
+
                         div { class: "mt-[1em] md:mt-[2em]",
                             h2 { "All versions of this track:" }
                             TrackListComp {
@@ -188,8 +180,6 @@ pub fn TrackListComp(
                             tr { key: "{track.id}",
                                 td {
 
-        
-
                                     Link { to: "/track/{track.id}", "{track.name}" }
                                 }
                                 td {
@@ -199,14 +189,13 @@ pub fn TrackListComp(
                                                 Link { key: "{artist.id}", to: "/artist/{artist.id}", "{artist.name}" }
                                             },
                                             None => rsx! {
-        
-                
+
                                                 components::Loading {}
                                             },
                                         }
                                     }
                                 }
-        
+
                                 td { class: "hidden lg:table-cell",
                                     match &track.album_id {
                                         Some(album_id) => {

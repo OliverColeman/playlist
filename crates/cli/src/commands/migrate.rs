@@ -14,6 +14,8 @@ pub async fn run(database: Database) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+const JD_GROUP_ID: &str = "zmWKoBuAoSLCWDvzn";
+
 pub async fn update_collection_and_field_names(
     database: Database,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -36,35 +38,38 @@ pub async fn update_collection_and_field_names(
     )
     .await?;
 
-    let playlist_docs = load_docs(database.clone(), "PlayList", mongodb::bson::doc! {})
-        .await?
-        .iter()
-        .map(|doc| {
-            let mut new_doc = create_new_doc(doc.clone());
+    let playlist_docs = load_docs(
+        database.clone(),
+        "PlayList",
+        mongodb::bson::doc! {"group_id": JD_GROUP_ID},
+    )
+    .await?
+    .iter()
+    .map(|doc| {
+        let mut new_doc = create_new_doc(doc.clone());
 
-            // For playlists, add search fields for all the compiler names as well as the playlist name
-            let mut search_strings =
-                vec![get_doc_field_or_empty_string(&new_doc, "name_normalised")];
+        // For playlists, add search fields for all the compiler names as well as the playlist name
+        let mut search_strings = vec![get_doc_field_or_empty_string(&new_doc, "name_normalised")];
 
-            let compiler_ids = new_doc.get_array("compiler_ids").unwrap_or(&vec![]).clone();
-            let compiler_names_normalised = compiler_ids
-                .iter()
-                .filter_map(|id_value| id_value.as_str())
-                .filter_map(|id_str| compiler_docs_by_id.get(id_str))
-                .map(|compiler_doc| {
-                    compiler_doc
-                        .get_str("name_normalised")
-                        .unwrap_or("")
-                        .to_string()
-                })
-                .collect::<Vec<String>>();
+        let compiler_ids = new_doc.get_array("compiler_ids").unwrap_or(&vec![]).clone();
+        let compiler_names_normalised = compiler_ids
+            .iter()
+            .filter_map(|id_value| id_value.as_str())
+            .filter_map(|id_str| compiler_docs_by_id.get(id_str))
+            .map(|compiler_doc| {
+                compiler_doc
+                    .get_str("name_normalised")
+                    .unwrap_or("")
+                    .to_string()
+            })
+            .collect::<Vec<String>>();
 
-            search_strings.extend(compiler_names_normalised.clone());
-            new_doc = add_search_fields(new_doc, search_strings);
+        search_strings.extend(compiler_names_normalised.clone());
+        new_doc = add_search_fields(new_doc, search_strings);
 
-            new_doc
-        })
-        .collect::<Vec<mongodb::bson::Document>>();
+        new_doc
+    })
+    .collect::<Vec<mongodb::bson::Document>>();
 
     println!("Inserting playlists: {}", playlist_docs.len());
     insert_docs::<PlayList>(database.clone(), playlist_docs.clone()).await?;
