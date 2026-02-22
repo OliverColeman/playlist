@@ -58,12 +58,15 @@ pub fn TrackComp(id: String) -> Element {
                                 h1 { "Track not found" }
                             },
                             Some(track) => rsx! {
-                                div { class: "flex items-center gap-10",
-                                    h1 {
-                                        "Track: "
-                                        span { class: "value", "{track.name}" }
+                                div { class: "flex justify-between gap-10",
+                                    div { class: "flex flex-wrap items-center gap-x-6",
+                                        h1 {
+                                            "Track: "
+                                            span { class: "value", "{track.name}" }
+                                        }
+                                        components::ServiceLinks { music_item: track.clone() }
                                     }
-                                    components::ServiceLinks { music_item: track.clone() }
+                                    components::MusicItemImage { music_item: track.clone() }
                                 }
                                 div { class: "flex flex-col md:flex-row gap-[0.3em] md:gap-[2em] md:items-center",
 

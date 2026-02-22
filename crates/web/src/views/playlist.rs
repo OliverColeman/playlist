@@ -28,12 +28,15 @@ pub fn PlaylistComp(id: String) -> Element {
                         h1 { components::Loading {} }
                     },
                     Some(playlist_data) => rsx! {
-                        div { class: "flex items-center gap-10",
-                            h1 {
-                                "Playlist: "
-                                span { class: "value", "{playlist_data.playlist.name}" }
+                        div { class: "flex justify-between gap-10",
+                            div { class: "flex flex-wrap items-center gap-x-6",
+                                h1 {
+                                    "Playlist: "
+                                    span { class: "value", "{playlist_data.playlist.name}" }
+                                }
+                                components::ServiceLinks { music_item: playlist_data.playlist.clone() }
                             }
-                            components::ServiceLinks { music_item: playlist_data.playlist.clone() }
+                            components::MusicItemImage { music_item: playlist_data.playlist.clone() }
                         }
                         div { class: "flex flex-col md:flex-row gap-[0.3em] md:gap-[2em] md:items-center",
 

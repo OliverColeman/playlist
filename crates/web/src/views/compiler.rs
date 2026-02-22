@@ -37,34 +37,35 @@ pub fn CompilerComp(id: String) -> Element {
 
         div { class: "lg:w-4xl mx-auto",
             div {
-                div { class: "flex items-center gap-10",
-                    h1 {
-                        "Compiler: "
-                        match &compiler {
-                            Some(compiler) => rsx! {
-                                span { class: "value", "{compiler.name}" }
+                match &compiler {
+                    Some(compiler) => rsx! {
+                        div { class: "flex justify-between gap-10",
+                            div { class: "flex flex-wrap items-center gap-x-6",
+                                h1 {
+                                    "Compiler: "
+                                    span { class: "value", "{compiler.name}" }
+                                }
+                                components::ServiceLinks { music_item: (*compiler).clone() }
+                            }
+                            components::MusicItemImage { music_item: (*compiler).clone() }
+                        }
+
+                        h2 { "Playlists:" }
+
+                        match &playlist_ids_for_compiler {
+                            Some(playlist_ids) => rsx! {
+                                PlaylistListComp { playlist_ids: playlist_ids.clone(), hide_compiler: true }
                             },
                             None => rsx! {
                                 components::Loading {}
                             },
                         }
-                    }
-                    match &compiler {
-                        Some(compiler) => rsx! {
-                            components::ServiceLinks { music_item: (*compiler).clone() }
-                        },
-                        None => rsx! {},
-                    }
-                }
-
-                h2 { "Playlists:" }
-
-                match &playlist_ids_for_compiler {
-                    Some(playlist_ids) => rsx! {
-                        PlaylistListComp { playlist_ids: playlist_ids.clone(), hide_compiler: true }
                     },
                     None => rsx! {
-                        components::Loading {}
+                        h1 {
+                            "Compiler: "
+                            components::Loading {}
+                        }
                     },
                 }
             }

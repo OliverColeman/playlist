@@ -62,20 +62,27 @@ pub fn ArtistComp(id: String) -> Element {
                             });
                         let artist = artist_data.artists_by_id.get(&id);
                         rsx! {
-                            div { class: "flex items-center gap-10",
-                                h1 {
-                                    "Artist: "
-                                    span { class: "value",
-                                        "{artist.map(|artist| &artist.name).unwrap_or(&\"Unknown Artist\".to_string())}"
+                            match artist {
+                                Some(artist) => rsx! {
+                                    div { class: "flex justify-between gap-10",
+                                        div { class: "flex flex-wrap items-center gap-x-6",
+                                            h1 {
+                                                "Artist: "
+                                                span { class: "value", "{&artist.name}" }
+                                            }
+                                            components::ServiceLinks { music_item: artist.clone() }
+                                        }
+                                        components::MusicItemImage { music_item: artist.clone() }
                                     }
-                                }
-                                match artist {
-                                    Some(artist) => rsx! {
-                                        components::ServiceLinks { music_item: artist.clone() }
-                                    },
-                                    None => rsx! {},
-                                }
+                                },
+                                None => rsx! {
+                                    h1 {
+                                        "Artist: "
+                                        components::Loading {}
+                                    }
+                                },
                             }
+
                             div { class: "mt-[1em] md:mt-[2em]",
                                 h2 { "Tracks:" }
                                 if filtered_track_ids.is_empty() {

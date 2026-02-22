@@ -3,6 +3,8 @@
 //! component and an Echo component for fullstack apps to be used in our app.
 
 mod loading;
+mod music_item_image;
 mod servicelinks;
 pub use loading::Loading;
+pub use music_item_image::MusicItemImage;
 pub use servicelinks::ServiceLinks;

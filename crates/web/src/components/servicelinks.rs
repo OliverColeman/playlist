@@ -1,16 +1,6 @@
 use dioxus::prelude::*;
 use playlist_core::models::{ExternalServiceAssociation, ItemType, MusicItem};
 
-#[component]
-pub fn Loading() -> Element {
-    rsx! {
-        span {
-            class: "loading inline-flex align-middle leading-none font-bold p-[2px]",
-            class: "before:content-['♫'] before:block before:animate-spin",
-        }
-    }
-}
-
 const SPOTIFY_ICON: Asset = asset!("/assets/external_service_icons/spotify.png");
 const MUSICBRAINZ_ICON: Asset = asset!("/assets/external_service_icons/musicbrainz.png");
 const YOUTUBE_ICON: Asset = asset!("/assets/external_service_icons/youtube.png");
