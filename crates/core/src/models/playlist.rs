@@ -6,7 +6,7 @@ use crate::models::track::Track;
 use serde::{Deserialize, Serialize};
 
 crate::define_music_item_struct_with_common_fields!(
-    PlayList, "playlist",
+    PlayList, crate::models::ItemType::Playlist, "playlist",
     {
         #[serde(default)]
         compiler_ids: Vec<String>,

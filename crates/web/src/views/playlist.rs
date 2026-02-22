@@ -28,10 +28,12 @@ pub fn PlaylistComp(id: String) -> Element {
                         h1 { components::Loading {} }
                     },
                     Some(playlist_data) => rsx! {
-                        h1 {
-
-                            "Playlist: "
-                            span { class: "value", "{playlist_data.playlist.name}" }
+                        div { class: "flex items-center gap-10",
+                            h1 {
+                                "Playlist: "
+                                span { class: "value", "{playlist_data.playlist.name}" }
+                            }
+                            components::ServiceLinks { music_item: playlist_data.playlist.clone() }
                         }
                         div { class: "flex flex-col md:flex-row gap-[0.3em] md:gap-[2em] md:items-center",
 
@@ -190,7 +192,9 @@ pub fn PlaylistListComp(playlist_ids: Option<Vec<String>>, hide_compiler: bool) 
                                         "{crate::util::format_duration(playlist.duration)}, "
                                         "{playlist.track_ids.len()} tracks"
                                     }
-                                    td { components::IconsAndLinks {} }
+                                    td {
+                                        components::ServiceLinks { music_item: playlist.clone() }
+                                    }
                                 }
                             }
                         }
@@ -200,3 +204,4 @@ pub fn PlaylistListComp(playlist_ids: Option<Vec<String>>, hide_compiler: bool) 
         }
     }
 }
+/* test change */

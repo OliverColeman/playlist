@@ -37,15 +37,23 @@ pub fn CompilerComp(id: String) -> Element {
 
         div { class: "lg:w-4xl mx-auto",
             div {
-                h1 {
-                    "Compiler: "
+                div { class: "flex items-center gap-10",
+                    h1 {
+                        "Compiler: "
+                        match &compiler {
+                            Some(compiler) => rsx! {
+                                span { class: "value", "{compiler.name}" }
+                            },
+                            None => rsx! {
+                                components::Loading {}
+                            },
+                        }
+                    }
                     match &compiler {
                         Some(compiler) => rsx! {
-                            span { class: "value", "{compiler.name}" }
+                            components::ServiceLinks { music_item: (*compiler).clone() }
                         },
-                        None => rsx! {
-                            components::Loading {}
-                        },
+                        None => rsx! {},
                     }
                 }
 
@@ -140,7 +148,9 @@ pub fn CompilerListComp(compiler_ids: Option<Vec<String>>) -> Element {
                                                     },
                                                 }
                                             }
-                                            td { components::IconsAndLinks {} }
+                                            td {
+                                                components::ServiceLinks { music_item: compiler.clone() }
+                                            }
                                         }
                                     }
                                 }

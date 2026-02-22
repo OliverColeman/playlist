@@ -41,7 +41,7 @@ pub async fn update_collection_and_field_names(
     let playlist_docs = load_docs(
         database.clone(),
         "PlayList",
-        mongodb::bson::doc! {"group_id": JD_GROUP_ID},
+        mongodb::bson::doc! {"groupId": JD_GROUP_ID},
     )
     .await?
     .iter()
@@ -277,11 +277,14 @@ async fn load_docs(
 }
 
 fn create_new_doc(original_doc: mongodb::bson::Document) -> mongodb::bson::Document {
-    static FIELDS_TO_REMOVE: [&str; 4] = [
+    static FIELDS_TO_REMOVE: [&str; 7] = [
         "appearsInPlayLists",
         "appearsInPlayListGroups",
         "name_normalised",
         "name_normalised_strong",
+        "spotify_id",
+        "spotify_user_id",
+        "mb_id",
     ];
 
     let mut new_doc = mongodb::bson::Document::new();
@@ -300,6 +303,45 @@ fn create_new_doc(original_doc: mongodb::bson::Document) -> mongodb::bson::Docum
         "name_normalised_strong",
         normalise_name_strong(original_doc.get_str("name").unwrap_or("")),
     );
+
+    // Add external service associations using new structure
+    let mut external_service_associations: Vec<mongodb::bson::Document> = vec![];
+    if let Some(spotify_id) = original_doc.get_str("spotifyId").ok() {
+        let image_urls = original_doc.get_document("imageURLs").ok().and_then(|doc| {
+            let small = doc.get_str("small").ok().map(|s| s.to_string());
+            let medium = doc.get_str("medium").ok().map(|s| s.to_string());
+            let large = doc.get_str("large").ok().map(|s| s.to_string());
+            if small.is_none() && medium.is_none() && large.is_none() {
+                None
+            } else {
+                Some(mongodb::bson::doc! {
+                    "small": small,
+                    "medium": medium,
+                    "large": large,
+                })
+            }
+        });
+        let association_doc = mongodb::bson::doc! {
+            "Spotify": {
+                "id": spotify_id.to_string(),
+                "image_urls": image_urls,
+            }
+        };
+        external_service_associations.push(association_doc);
+    }
+    if let Some(mb_id) = original_doc.get_str("mbId").ok() {
+        external_service_associations.push(mongodb::bson::doc! {
+            "MusicBrainz": {
+                "id": mb_id.to_string(),
+            }
+        });
+    }
+    if !external_service_associations.is_empty() {
+        new_doc.insert(
+            "external_service_associations",
+            external_service_associations,
+        );
+    }
 
     new_doc
 }

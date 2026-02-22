@@ -5,7 +5,7 @@ use crate::models::album::Album;
 use crate::models::track::Track;
 
 crate::define_music_item_struct_with_common_fields!(
-    Artist, "artist",
+    Artist, crate::models::ItemType::Artist, "artist",
     {
         #[serde(skip_serializing_if = "Option::is_none")]
         alt_names: Option<Vec<String>>,

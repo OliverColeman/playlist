@@ -48,7 +48,6 @@ pub fn TrackComp(id: String) -> Element {
                     None => rsx! {
                         h1 {
                             "Track: "
-
                             components::Loading {}
                         }
                     },
@@ -59,9 +58,12 @@ pub fn TrackComp(id: String) -> Element {
                                 h1 { "Track not found" }
                             },
                             Some(track) => rsx! {
-                                h1 {
-                                    "Track: "
-                                    span { class: "value", "{track.name}" }
+                                div { class: "flex items-center gap-10",
+                                    h1 {
+                                        "Track: "
+                                        span { class: "value", "{track.name}" }
+                                    }
+                                    components::ServiceLinks { music_item: track.clone() }
                                 }
                                 div { class: "flex flex-col md:flex-row gap-[0.3em] md:gap-[2em] md:items-center",
 
@@ -255,7 +257,9 @@ pub fn TrackListComp(
                                         },
                                     }
                                 }
-                                td { "TODO" }
+                                td {
+                                    components::ServiceLinks { music_item: track.clone() }
+                                }
                             }
                         },
                     }

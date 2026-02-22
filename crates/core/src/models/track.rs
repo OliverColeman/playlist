@@ -5,7 +5,7 @@ use crate::models::album::Album;
 use crate::models::artist::Artist;
 
 crate::define_music_item_struct_with_common_fields!(
-    Track, "track",
+    Track, crate::models::ItemType::Track, "track",
     {
         #[serde(default)]
         artist_ids: Vec<String>,

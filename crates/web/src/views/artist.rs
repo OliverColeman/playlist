@@ -8,11 +8,12 @@ use std::collections::HashSet;
 
 #[component]
 pub fn ArtistComp(id: String) -> Element {
-    let artist_with_associated_data_resource = use_resource(use_reactive!(|id| async move {
-        crate::load_artist_with_associated_data(id.to_string())
-            .await
-            .unwrap()
-    }));
+    let artist_with_associated_data_resource: Resource<models::artist::ArtistWithAssociatedData> =
+        use_resource(use_reactive!(|id| async move {
+            crate::load_artist_with_associated_data(id.to_string())
+                .await
+                .unwrap()
+        }));
 
     let playlists_by_id =
         use_context::<Resource<models::MusicItemsById<models::playlist::PlayList>>>();
@@ -38,6 +39,7 @@ pub fn ArtistComp(id: String) -> Element {
                     &*playlists_by_id.read_unchecked(),
                 ) {
                     (None, _) => rsx! {
+
                         h1 {
                             "Artist: "
                             components::Loading {}
@@ -58,14 +60,22 @@ pub fn ArtistComp(id: String) -> Element {
                                 let name_b = artist_data.tracks_by_id.get(b).map(|t| &t.name);
                                 name_a.cmp(&name_b)
                             });
+                        let artist = artist_data.artists_by_id.get(&id);
                         rsx! {
-                            h1 {
-                                "Artist: "
-                                span { class: "value",
-                                    "{artist_data.artists_by_id.get(&id).map(|artist| &artist.name).unwrap_or(&\"Unknown Artist\".to_string())}"
+                            div { class: "flex items-center gap-10",
+                                h1 {
+                                    "Artist: "
+                                    span { class: "value",
+                                        "{artist.map(|artist| &artist.name).unwrap_or(&\"Unknown Artist\".to_string())}"
+                                    }
+                                }
+                                match artist {
+                                    Some(artist) => rsx! {
+                                        components::ServiceLinks { music_item: artist.clone() }
+                                    },
+                                    None => rsx! {},
                                 }
                             }
-
                             div { class: "mt-[1em] md:mt-[2em]",
                                 h2 { "Tracks:" }
                                 if filtered_track_ids.is_empty() {
@@ -102,7 +112,9 @@ pub fn ArtistListComp(artists: Vec<Artist>) -> Element {
                         td {
                             Link { to: format!("/artist/{}", artist.id), "{artist.name}" }
                         }
-                        td { "TODO" }
+                        td {
+                            components::ServiceLinks { music_item: artist.clone() }
+                        }
                     }
                 }
             }

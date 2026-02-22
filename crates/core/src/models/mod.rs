@@ -6,6 +6,15 @@ pub mod compiler;
 pub mod playlist;
 pub mod track;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ItemType {
+    Track,
+    Artist,
+    Album,
+    Playlist,
+    Compiler,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageUrls {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -16,8 +25,21 @@ pub struct ImageUrls {
     pub large: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ExternalServiceAssociation {
+    Spotify {
+        id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        image_urls: Option<ImageUrls>,
+    },
+    MusicBrainz {
+        id: String,
+    },
+}
+
 /// Trait for all music items with common fields
 pub trait MusicItemBase {
+    fn item_type() -> ItemType;
     fn collection_name() -> &'static str;
     fn id(&self) -> &str;
     fn name(&self) -> &str;
@@ -28,12 +50,10 @@ pub trait MusicItemBase {
     fn data_maybe_missing(&self) -> Option<&[String]>;
     fn potential_duplicate(&self) -> Option<bool>;
     fn needs_review(&self) -> Option<bool>;
-    fn image_urls(&self) -> Option<&ImageUrls>;
-    fn spotify_id(&self) -> Option<&str>;
-    fn mb_id(&self) -> Option<&str>;
     fn search_terms(&self) -> &[String];
     fn search_double_metaphone_codes(&self) -> &[String];
     fn search_n_grams(&self) -> &[String];
+    fn external_service_associations(&self) -> Option<&[ExternalServiceAssociation]>;
 }
 
 pub trait MusicItem: MusicItemBase + Clone {}
@@ -42,6 +62,7 @@ pub trait MusicItem: MusicItemBase + Clone {}
 macro_rules! define_music_item_struct_with_common_fields {
     (
         $name:ident,
+        $item_type:expr,
         $collection_name:expr,
         { $($(#[$attr:meta])* $field_name:ident : $field_type:ty),* $(,)? }
     ) => {
@@ -80,14 +101,7 @@ macro_rules! define_music_item_struct_with_common_fields {
             pub needs_review: Option<bool>,
 
             #[serde(skip_serializing_if = "Option::is_none")]
-            pub image_urls: Option<crate::models::ImageUrls>,
-
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub spotify_id: Option<String>,
-
-            /// MusicBrainz ID
-            #[serde(skip_serializing_if = "Option::is_none")]
-            pub mb_id: Option<String>,
+            pub external_service_associations: Option<Vec<crate::models::ExternalServiceAssociation>>,
 
             pub search_terms: Vec<String>,
             pub search_double_metaphone_codes: Vec<String>,
@@ -97,6 +111,7 @@ macro_rules! define_music_item_struct_with_common_fields {
         }
 
         impl crate::models::MusicItemBase for $name {
+            fn item_type() -> crate::models::ItemType { $item_type }
             fn collection_name() -> &'static str { $collection_name }
             fn id(&self) -> &str { &self.id }
             fn name(&self) -> &str { &self.name }
@@ -107,9 +122,7 @@ macro_rules! define_music_item_struct_with_common_fields {
             fn data_maybe_missing(&self) -> Option<&[String]> { self.data_maybe_missing.as_deref() }
             fn potential_duplicate(&self) -> Option<bool> { self.potential_duplicate }
             fn needs_review(&self) -> Option<bool> { self.needs_review }
-            fn image_urls(&self) -> Option<&crate::models::ImageUrls> { self.image_urls.as_ref() }
-            fn spotify_id(&self) -> Option<&str> { self.spotify_id.as_deref() }
-            fn mb_id(&self) -> Option<&str> { self.mb_id.as_deref() }
+            fn external_service_associations(&self) -> Option<&[crate::models::ExternalServiceAssociation]> { self.external_service_associations.as_deref() }
             fn search_double_metaphone_codes(&self) -> &[String] { &self.search_double_metaphone_codes }
             fn search_n_grams(&self) -> &[String] { &self.search_n_grams }
             fn search_terms(&self) -> &[String] { &self.search_terms }
