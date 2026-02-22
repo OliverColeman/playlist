@@ -1,7 +1,10 @@
 [application]
 
+tailwind_input = "crates/web/tailwind.css"
+tailwind_output = "crates/web/assets/tailwind.css"
+
 [web.watcher]
-watch_path = ["src", "assets"]
+watch_path = ["crates/core/src", "crates/web/src", "crates/web/assets"]
 
 [web.app]
 

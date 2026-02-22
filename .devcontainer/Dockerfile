@@ -5,7 +5,7 @@ ENV TZ=$TIMEZONE
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN echo Cache bust 1
+RUN echo Cache bust 2
 
 RUN apt-get update && apt-get upgrade -y
 RUN apt-get install -y \
@@ -64,3 +64,9 @@ RUN rustup target add wasm32-unknown-unknown
 # Setup Zsh with Antidote, config files are copied in postCreateCommand in devcontainer.json
 ENV ZDOTDIR=$HOME
 RUN cp /usr/share/zsh-antidote/antidote.zsh $ZDOTDIR/antidote.zsh
+
+# Install Tailwind CLI
+RUN mkdir -p $HOME/.local/bin && \
+    curl -sL https://github.com/tailwindlabs/tailwindcss/releases/download/v4.2.0/tailwindcss-linux-x64 \
+    -o $HOME/.local/bin/tailwindcss && \
+    chmod +x $HOME/.local/bin/tailwindcss
