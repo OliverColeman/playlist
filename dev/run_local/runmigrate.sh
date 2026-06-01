@@ -6,4 +6,4 @@ set -a
 source dev/run_local/.local.env
 set +a
 
-cargo run -p playlist-cli
+cargo run -p playlist-cli dbmigrate

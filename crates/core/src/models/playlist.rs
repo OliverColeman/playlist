@@ -31,9 +31,6 @@ crate::define_music_item_struct_with_common_fields!(
         /// Unix timestamp
         #[serde(skip_serializing_if = "Option::is_none")]
         date: Option<f64>,
-
-        #[serde(skip_serializing_if = "Option::is_none")]
-        spotify_user_id: Option<String>,
     }
 );
 

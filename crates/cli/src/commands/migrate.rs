@@ -277,13 +277,12 @@ async fn load_docs(
 }
 
 fn create_new_doc(original_doc: mongodb::bson::Document) -> mongodb::bson::Document {
-    static FIELDS_TO_REMOVE: [&str; 7] = [
+    static FIELDS_TO_REMOVE: [&str; 6] = [
         "appearsInPlayLists",
         "appearsInPlayListGroups",
         "name_normalised",
         "name_normalised_strong",
         "spotify_id",
-        "spotify_user_id",
         "mb_id",
     ];
 
