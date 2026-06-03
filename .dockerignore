@@ -1,0 +1,11 @@
+# Keep the Docker build context small. The build compiles from source inside
+# the image, so none of these are needed and copying them (especially target/)
+# would be slow and huge.
+target
+scratch
+debug
+.git
+**/*.env
+.devcontainer
+.vscode
+.claude

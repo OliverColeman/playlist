@@ -1,0 +1,9 @@
+# Caddy reverse proxy for the Just Dance Archives web app.
+# SITE_ADDRESS is injected from the environment (see .playlist.env.example).
+# Because it's a real domain, Caddy automatically provisions and renews a
+# Let's Encrypt certificate and redirects HTTP -> HTTPS.
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+	reverse_proxy web:8080
+}
