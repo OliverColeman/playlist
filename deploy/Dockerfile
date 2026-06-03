@@ -3,7 +3,9 @@
 ##############################################################################
 # Build stage — compiles the Dioxus fullstack web bundle and the CLI binary.
 ##############################################################################
-FROM rust:1.96-bookworm AS build
+# Trixie (Debian 13, glibc 2.41) is required: the prebuilt `dx` binary fetched
+# below is built against glibc >= 2.38, so it won't run on bookworm (glibc 2.36).
+FROM rust:1.96-trixie AS build
 
 # wasm target for the Dioxus client build.
 RUN rustup target add wasm32-unknown-unknown
@@ -29,12 +31,14 @@ RUN cargo build -p playlist-cli --release
 ##############################################################################
 # Runtime stage — slim image holding just the two binaries + web assets.
 ##############################################################################
-FROM debian:bookworm-slim AS runtime
+# Must match the build stage's glibc (trixie) — the compiled binaries link it.
+FROM debian:trixie-slim AS runtime
 
-# ca-certificates: TLS to MongoDB / Spotify. libssl3: reqwest's native-tls
-# backend used by the CLI's HTTP client.
+# ca-certificates: TLS to MongoDB / Spotify. libssl3t64: reqwest's native-tls
+# backend used by the CLI's HTTP client (named libssl3t64 on trixie after the
+# 64-bit time_t transition; it was libssl3 on bookworm).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libssl3 \
+    && apt-get install -y --no-install-recommends ca-certificates libssl3t64 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
