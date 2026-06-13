@@ -40,16 +40,18 @@ services:
         condition: service_healthy
 
   mongodb:
-    image: mongo:8.2
+    image: mongo:7.0
     restart: unless-stopped
     # Cap the WiredTiger cache so Mongo leaves room for the OS and web server.
-    # Sized for a 1 GB host: ~0.4 GB cache + ~0.2 GB Mongo overhead leaves
-    # ~0.4 GB for the OS, Docker, and the web container.
-    command: --quiet --wiredTigerCacheSizeGB 0.4
+    # Sized for a 2 GB host: 0.5 GB cache + ~0.2 GB Mongo overhead leaves
+    # ~1.3 GB for the OS, Docker, Caddy, and the web container.
+    command: --quiet --wiredTigerCacheSizeGB 0.5
+    ports:
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')" ]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/27017'"]
       interval: 10s
       timeout: 5s
       retries: 5
