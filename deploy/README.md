@@ -26,6 +26,7 @@ Everything needed on the server lives in `deploy/vps/`:
 | `Caddyfile` | Reverse-proxy config (automatic HTTPS). |
 | `.playlist.env.example` | Template for the env file the scripts load. |
 | `start.sh` / `stop.sh` | Pull + (re)start, and stop. |
+| `remote_playlist_cli.sh` | **Run from your local machine** — runs `playlist-cli` in the web container over SSH. |
 | `install_docker.sh` | Install Docker Engine + Compose on Ubuntu/Debian. |
 | `setup_ufw.sh` | Firewall: allow SSH, 80, 443. |
 | `provision_vps.sh` | **Run from your local machine** — sets up a fresh VPS over SSH. |
@@ -105,6 +106,26 @@ Or open an interactive shell in the container:
 
 ```bash
 docker compose --env-file .playlist.env exec web bash
+```
+
+**From your local machine.** `remote_playlist_cli.sh` wraps the above over SSH so
+you don't have to log in first — it forwards all arguments to `playlist-cli`:
+
+```bash
+cd deploy/vps
+./remote_playlist_cli.sh import <playlist URI> [user_id] --name "<name>" --date YYYY-MM-DD
+
+# Rename an existing compiler
+./remote_playlist_cli.sh set-compiler-name <compiler_id> "<name>"
+```
+
+By default it SSHes to `SITE_ADDRESS` from `.playlist.env`. Override the
+connection when needed (e.g. a specific SSH user, non-default port, or deploy dir
+you passed to `provision_vps.sh`):
+
+```bash
+PLAYLIST_VPS=root@vps.example.com PLAYLIST_SSH_PORT=2222 PLAYLIST_REMOTE_DIR=/opt/playlist \
+    ./remote_playlist_cli.sh dbmigrate
 ```
 
 ### Updating after a new image is published
