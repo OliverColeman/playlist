@@ -7,6 +7,7 @@ edition = "2024"
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 futures = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
@@ -18,6 +19,11 @@ deunicode = "1.6"
 mongodb = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 rand = { version = "0.9", optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros"] }
+mongodb = { workspace = true }
+serde_json = { workspace = true }
 
 [features]
 default = []

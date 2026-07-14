@@ -31,7 +31,14 @@ impl From<VarError> for ServerError {
     }
 }
 
-// Global cached MongoDB client - initialized once on first use
+// Global cached MongoDB client - initialized once on first use.
+//
+// WARNING: this client is bound to the tokio runtime that first initializes it (the driver
+// spawns its I/O tasks onto that runtime). It must not be used from a different runtime:
+// once the initializing runtime is dropped, all operations on the cached client fail.
+// Tests that each create their own runtime must instead share a single runtime for every
+// database access in the process — see the shared-runtime pattern used in the integration
+// tests (crates/core/tests/db_integration.rs, crates/cli/tests/cli_integration.rs).
 static DB_CLIENT: tokio::sync::OnceCell<mongodb::Client> = tokio::sync::OnceCell::const_new();
 
 /// Initialize and cache the MongoDB client. This is called automatically by get_database().
@@ -76,6 +83,10 @@ async fn get_or_init_client(config: Config) -> Result<&'static mongodb::Client, 
 }
 
 /// Get a database handle. The underlying client connection is cached and reused.
+///
+/// Note: the cached client is process-global and bound to the tokio runtime that first calls
+/// this function — it must not be used across multiple runtimes (see the warning on
+/// `DB_CLIENT` above and the shared-runtime pattern in the integration tests).
 pub async fn get_database() -> Result<mongodb::Database, ServerError> {
     let config = Config::from_env()?;
     let client = get_or_init_client(config.clone()).await?;
@@ -92,4 +103,28 @@ pub fn generate_id() -> String {
             CHARSET[idx] as char
         })
         .collect()
+}
+
+// This module is only compiled with the "server" feature (see lib.rs).
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_id_is_17_alphanumeric_ascii_chars() {
+        for _ in 0..100 {
+            let id = generate_id();
+            assert_eq!(id.len(), 17);
+            assert!(
+                id.chars().all(|c| c.is_ascii_alphanumeric()),
+                "id contains a non-alphanumeric char: {id:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn generate_id_returns_different_ids_on_successive_calls() {
+        // With a 62^17 keyspace a collision here is practically impossible.
+        assert_ne!(generate_id(), generate_id());
+    }
 }

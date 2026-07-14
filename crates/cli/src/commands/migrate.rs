@@ -276,7 +276,7 @@ async fn load_docs(
     Ok(docs)
 }
 
-fn create_new_doc(original_doc: mongodb::bson::Document) -> mongodb::bson::Document {
+pub(crate) fn create_new_doc(original_doc: mongodb::bson::Document) -> mongodb::bson::Document {
     static FIELDS_TO_REMOVE: [&str; 6] = [
         "appearsInPlayLists",
         "appearsInPlayListGroups",
@@ -345,7 +345,7 @@ fn create_new_doc(original_doc: mongodb::bson::Document) -> mongodb::bson::Docum
     new_doc
 }
 
-fn add_search_fields(
+pub(crate) fn add_search_fields(
     mut doc: mongodb::bson::Document,
     normalised_search_strings: Vec<String>,
 ) -> mongodb::bson::Document {
@@ -401,11 +401,14 @@ where
     Ok(())
 }
 
-fn get_doc_field_or_empty_string(doc: &mongodb::bson::Document, field_name: &str) -> String {
+pub(crate) fn get_doc_field_or_empty_string(
+    doc: &mongodb::bson::Document,
+    field_name: &str,
+) -> String {
     doc.get_str(field_name).unwrap_or("").to_string()
 }
 
-fn camel_to_snake_case(text: &str) -> String {
+pub(crate) fn camel_to_snake_case(text: &str) -> String {
     // Special cases
     let text = text.replace("PlayList", "Playlist").replace("URL", "Url");
 
@@ -450,4 +453,239 @@ fn camel_to_snake_case(text: &str) -> String {
     }
 
     buffer
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mongodb::bson::{Bson, Document, doc};
+
+    fn string_array(doc: &Document, field: &str) -> Vec<String> {
+        doc.get_array(field)
+            .unwrap_or_else(|_| panic!("missing array field {field}"))
+            .iter()
+            .map(|v| {
+                v.as_str()
+                    .expect("array element is not a string")
+                    .to_string()
+            })
+            .collect()
+    }
+
+    fn sorted_string_array(doc: &Document, field: &str) -> Vec<String> {
+        let mut values = string_array(doc, field);
+        values.sort();
+        values
+    }
+
+    // --- camel_to_snake_case ---
+
+    #[test]
+    fn camel_to_snake_case_plain_word_unchanged() {
+        assert_eq!(camel_to_snake_case("name"), "name");
+        assert_eq!(camel_to_snake_case("_id"), "_id");
+    }
+
+    #[test]
+    fn camel_to_snake_case_camel_case() {
+        assert_eq!(camel_to_snake_case("camelCase"), "camel_case");
+        assert_eq!(camel_to_snake_case("spotifyId"), "spotify_id");
+        assert_eq!(camel_to_snake_case("mbId"), "mb_id");
+        assert_eq!(camel_to_snake_case("compilerIds"), "compiler_ids");
+    }
+
+    #[test]
+    fn camel_to_snake_case_pascal_case() {
+        assert_eq!(camel_to_snake_case("PascalCase"), "pascal_case");
+    }
+
+    #[test]
+    fn camel_to_snake_case_url_special_case() {
+        // "URL" is special-cased to "Url" before conversion, so the acronym does not
+        // produce an underscore per letter.
+        assert_eq!(camel_to_snake_case("imageURLs"), "image_urls");
+        assert_eq!(camel_to_snake_case("URLs"), "urls");
+    }
+
+    #[test]
+    fn camel_to_snake_case_playlist_special_case() {
+        // "PlayList" is special-cased to "Playlist" before conversion.
+        assert_eq!(
+            camel_to_snake_case("appearsInPlayLists"),
+            "appears_in_playlists"
+        );
+        assert_eq!(camel_to_snake_case("PlayList"), "playlist");
+    }
+
+    #[test]
+    fn camel_to_snake_case_acronym_run() {
+        // An uppercase run followed by a lowercase letter breaks before its last letter:
+        // "ABc" -> "a_bc" (no special-casing involved).
+        assert_eq!(camel_to_snake_case("ABc"), "a_bc");
+        assert_eq!(camel_to_snake_case("myABCField"), "my_abc_field");
+    }
+
+    // --- create_new_doc ---
+
+    #[test]
+    fn create_new_doc_removes_fields_and_snake_cases_keys() {
+        let original = doc! {
+            "_id": "abc123",
+            "name": "Café (Live)",
+            "appearsInPlayLists": ["p1"],
+            "appearsInPlayListGroups": ["g1"],
+            "name_normalised": "stale",
+            "name_normalised_strong": "stale",
+            "trackIds": ["t1", "t2"],
+            "userId": "u1",
+        };
+
+        let new_doc = create_new_doc(original);
+
+        assert_eq!(new_doc.get_str("_id").unwrap(), "abc123");
+        assert_eq!(new_doc.get_str("name").unwrap(), "Café (Live)");
+        assert_eq!(string_array(&new_doc, "track_ids"), vec!["t1", "t2"]);
+        assert_eq!(new_doc.get_str("user_id").unwrap(), "u1");
+
+        // Removed fields must not survive under either the old or the new key.
+        for key in [
+            "appearsInPlayLists",
+            "appears_in_playlists",
+            "appearsInPlayListGroups",
+            "appears_in_playlist_groups",
+            "trackIds",
+            "userId",
+        ] {
+            assert!(!new_doc.contains_key(key), "unexpected key {key}");
+        }
+    }
+
+    #[test]
+    fn create_new_doc_recomputes_normalised_names_from_name() {
+        let original = doc! {
+            "_id": "abc123",
+            "name": "Café (Live)",
+            "name_normalised": "stale",
+            "name_normalised_strong": "stale",
+        };
+
+        let new_doc = create_new_doc(original);
+
+        assert_eq!(new_doc.get_str("name_normalised").unwrap(), "cafe live");
+        assert_eq!(new_doc.get_str("name_normalised_strong").unwrap(), "cafe");
+    }
+
+    #[test]
+    fn create_new_doc_builds_spotify_and_musicbrainz_associations() {
+        let original = doc! {
+            "_id": "abc123",
+            "name": "Thing",
+            "spotifyId": "sp123",
+            "imageURLs": { "small": "s.jpg", "large": "l.jpg" },
+            "mbId": "mb123",
+        };
+
+        let new_doc = create_new_doc(original);
+
+        let assocs = new_doc.get_array("external_service_associations").unwrap();
+        assert_eq!(assocs.len(), 2);
+
+        let spotify = assocs[0]
+            .as_document()
+            .unwrap()
+            .get_document("Spotify")
+            .unwrap();
+        assert_eq!(spotify.get_str("id").unwrap(), "sp123");
+        let image_urls = spotify.get_document("image_urls").unwrap();
+        assert_eq!(image_urls.get_str("small").unwrap(), "s.jpg");
+        assert_eq!(image_urls.get_str("large").unwrap(), "l.jpg");
+        // Absent sizes are stored as explicit nulls.
+        assert_eq!(image_urls.get("medium"), Some(&Bson::Null));
+
+        let musicbrainz = assocs[1]
+            .as_document()
+            .unwrap()
+            .get_document("MusicBrainz")
+            .unwrap();
+        assert_eq!(musicbrainz.get_str("id").unwrap(), "mb123");
+
+        // NOTE: documents current behaviour. FIELDS_TO_REMOVE lists the snake_case names
+        // ("spotify_id", "mb_id") but the removal check runs against the original
+        // camelCase keys, so "spotifyId"/"mbId"/"imageURLs" survive as snake_cased
+        // leftover fields. They are dropped later when insert_docs round-trips the doc
+        // through the typed model structs (which have no such fields).
+        assert_eq!(new_doc.get_str("spotify_id").unwrap(), "sp123");
+        assert_eq!(new_doc.get_str("mb_id").unwrap(), "mb123");
+        assert!(new_doc.contains_key("image_urls"));
+    }
+
+    #[test]
+    fn create_new_doc_spotify_association_without_images_has_null_image_urls() {
+        let original = doc! {
+            "_id": "abc123",
+            "name": "Thing",
+            "spotifyId": "sp123",
+        };
+
+        let new_doc = create_new_doc(original);
+
+        let assocs = new_doc.get_array("external_service_associations").unwrap();
+        assert_eq!(assocs.len(), 1);
+        let spotify = assocs[0]
+            .as_document()
+            .unwrap()
+            .get_document("Spotify")
+            .unwrap();
+        assert_eq!(spotify.get_str("id").unwrap(), "sp123");
+        assert_eq!(spotify.get("image_urls"), Some(&Bson::Null));
+    }
+
+    #[test]
+    fn create_new_doc_without_service_ids_has_no_associations_field() {
+        let original = doc! { "_id": "abc123", "name": "Thing" };
+        let new_doc = create_new_doc(original);
+        assert!(!new_doc.contains_key("external_service_associations"));
+    }
+
+    // --- add_search_fields ---
+
+    #[test]
+    fn add_search_fields_inserts_deduplicated_search_fields() {
+        let doc = doc! { "name": "Abba Gold" };
+        // "abba" appears in both search strings and must only be indexed once.
+        let result = add_search_fields(doc, vec!["abba gold".to_string(), "abba".to_string()]);
+
+        // Existing fields are preserved.
+        assert_eq!(result.get_str("name").unwrap(), "Abba Gold");
+
+        assert_eq!(
+            sorted_string_array(&result, "search_terms"),
+            vec!["abba", "gold"]
+        );
+
+        // Double Metaphone: "abba" -> AP; "gold" -> KLT.
+        assert_eq!(
+            sorted_string_array(&result, "search_double_metaphone_codes"),
+            vec!["AP", "KLT"]
+        );
+
+        // 2- and 3-grams of "abba" and "gold", deduplicated.
+        assert_eq!(
+            sorted_string_array(&result, "search_n_grams"),
+            vec![
+                "ab", "abb", "ba", "bb", "bba", "go", "gol", "ld", "ol", "old"
+            ]
+        );
+    }
+
+    // --- get_doc_field_or_empty_string ---
+
+    #[test]
+    fn get_doc_field_or_empty_string_returns_value_or_empty() {
+        let doc = doc! { "a": "hello", "b": 42 };
+        assert_eq!(get_doc_field_or_empty_string(&doc, "a"), "hello");
+        // Non-string fields and missing fields both yield the empty string.
+        assert_eq!(get_doc_field_or_empty_string(&doc, "b"), "");
+        assert_eq!(get_doc_field_or_empty_string(&doc, "missing"), "");
+    }
 }

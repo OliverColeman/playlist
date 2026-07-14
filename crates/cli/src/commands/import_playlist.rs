@@ -14,6 +14,18 @@ use url_parse::core::Parser;
 
 const SPOTIFY_API: &str = "https://api.spotify.com/v1";
 const TOKEN_URL: &str = "https://accounts.spotify.com/api/token";
+
+/// Spotify Web API base URL. Overridable via the SPOTIFY_API_BASE env var (used by tests
+/// to point the importer at a mock server).
+fn spotify_api_base() -> String {
+    std::env::var("SPOTIFY_API_BASE").unwrap_or_else(|_| SPOTIFY_API.to_string())
+}
+
+/// Spotify token endpoint URL. Overridable via the SPOTIFY_TOKEN_URL env var (used by
+/// tests to point the importer at a mock server).
+fn spotify_token_url() -> String {
+    std::env::var("SPOTIFY_TOKEN_URL").unwrap_or_else(|_| TOKEN_URL.to_string())
+}
 /// Client-credentials tokens have no associated user country, so Spotify requires an
 /// explicit `market` to return track data (without it, Get Playlist omits `tracks` and
 /// Get Playlist Items returns an error). Overridable via the SPOTIFY_MARKET env var.
@@ -107,19 +119,15 @@ pub async fn import_playlist(
     if uri.contains("spotify.com") {
         do_spotify_import(database, uri, user_id, name_override, date).await?;
     } else {
-        eprintln!("Unsupported service URI.");
-        std::process::exit(1);
+        return Err("Unsupported service URI.".into());
     }
     Ok(())
 }
 
-async fn do_spotify_import(
-    database: Database,
-    uri: &str,
-    user_id_override: Option<String>,
-    name_override: Option<String>,
-    date: Option<f64>,
-) -> Result<(), Box<dyn std::error::Error>> {
+/// Extract the playlist id from a Spotify playlist URL. Accepts the various URL shapes
+/// Spotify has used over the years (see the examples at the bottom of this file); the
+/// playlist id is the segment following a final "playlist" path segment.
+pub(crate) fn parse_spotify_playlist_id(uri: &str) -> Result<String, Box<dyn std::error::Error>> {
     const PARSE_ERROR_MSG: &str = "Not a valid Spotify playlist URL";
     let parsed = Parser::new(None).parse(uri)?;
     let segments = parsed.path.ok_or(PARSE_ERROR_MSG)?;
@@ -130,7 +138,17 @@ async fn do_spotify_import(
     if last_two_segments[0] != "playlist" {
         return Err(PARSE_ERROR_MSG.into());
     }
-    let playlist_id = last_two_segments[1].clone();
+    Ok(last_two_segments[1].clone())
+}
+
+async fn do_spotify_import(
+    database: Database,
+    uri: &str,
+    user_id_override: Option<String>,
+    name_override: Option<String>,
+    date: Option<f64>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let playlist_id = parse_spotify_playlist_id(uri)?;
 
     println!("Importing Spotify playlist with ID: {}... ", playlist_id);
 
@@ -148,10 +166,12 @@ async fn do_spotify_import(
     // Playlist metadata. Note: Spotify-owned editorial/algorithmic playlists are no longer
     // accessible to apps in development mode and will return a 404 here; regular
     // user-created public playlists work fine.
+    let api_base = spotify_api_base();
+
     let playlist: SpPlaylist = api_get(
         &http,
         &token,
-        &format!("{SPOTIFY_API}/playlists/{playlist_id}?market={market}"),
+        &format!("{api_base}/playlists/{playlist_id}?market={market}"),
     )
     .await?;
 
@@ -163,7 +183,7 @@ async fn do_spotify_import(
             &http,
             &token,
             &format!(
-                "{SPOTIFY_API}/playlists/{playlist_id}/tracks?market={market}&limit=100&offset={offset}"
+                "{api_base}/playlists/{playlist_id}/tracks?market={market}&limit=100&offset={offset}"
             ),
         )
         .await?;
@@ -289,7 +309,7 @@ async fn get_access_token(
     client_secret: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let response = http
-        .post(TOKEN_URL)
+        .post(spotify_token_url())
         .basic_auth(client_id, Some(client_secret))
         .form(&[("grant_type", "client_credentials")])
         .send()
@@ -462,7 +482,12 @@ async fn upsert_compilers(
     database: &Database,
     owner: &SpOwner,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let profile: SpUser = api_get(http, token, &format!("{SPOTIFY_API}/users/{}", owner.id)).await?;
+    let profile: SpUser = api_get(
+        http,
+        token,
+        &format!("{}/users/{}", spotify_api_base(), owner.id),
+    )
+    .await?;
 
     // Prefer the profile display name, then the owner display name, then the id.
     let name = profile
@@ -592,3 +617,170 @@ fn images_to_image_urls(images: &[SpImage]) -> Option<ImageUrls> {
 // https://play.spotify.com/user/1277013959/playlist/0j0RUMi4syrTPG6jtHPNux
 // https://open.spotify.com/user/1255231405/playlist/1nanrCTj3UhGJanaIVPyi8
 // https://open.spotify.com/playlist/3y1VsqLEvW4vUQvIAVjT1P
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sorted(mut values: Vec<String>) -> Vec<String> {
+        values.sort();
+        values
+    }
+
+    // --- parse_spotify_playlist_id ---
+
+    #[test]
+    fn parse_playlist_id_from_plain_playlist_url() {
+        assert_eq!(
+            parse_spotify_playlist_id("https://open.spotify.com/playlist/3y1VsqLEvW4vUQvIAVjT1P")
+                .unwrap(),
+            "3y1VsqLEvW4vUQvIAVjT1P"
+        );
+    }
+
+    #[test]
+    fn parse_playlist_id_from_user_playlist_url() {
+        assert_eq!(
+            parse_spotify_playlist_id(
+                "https://open.spotify.com/user/1255231405/playlist/1nanrCTj3UhGJanaIVPyi8"
+            )
+            .unwrap(),
+            "1nanrCTj3UhGJanaIVPyi8"
+        );
+    }
+
+    #[test]
+    fn parse_playlist_id_from_play_spotify_user_playlist_url() {
+        assert_eq!(
+            parse_spotify_playlist_id(
+                "https://play.spotify.com/user/1277013959/playlist/0j0RUMi4syrTPG6jtHPNux"
+            )
+            .unwrap(),
+            "0j0RUMi4syrTPG6jtHPNux"
+        );
+    }
+
+    #[test]
+    fn parse_playlist_id_ignores_query_string() {
+        assert_eq!(
+            parse_spotify_playlist_id(
+                "https://open.spotify.com/playlist/3y1VsqLEvW4vUQvIAVjT1P?si=abc123"
+            )
+            .unwrap(),
+            "3y1VsqLEvW4vUQvIAVjT1P"
+        );
+    }
+
+    #[test]
+    fn parse_playlist_id_rejects_trailing_path_segment() {
+        // The id must be the final path segment: trailing garbage means the last two
+        // segments are ("<id>", "extra"), which is not a playlist reference.
+        assert!(
+            parse_spotify_playlist_id(
+                "https://open.spotify.com/playlist/3y1VsqLEvW4vUQvIAVjT1P/extra"
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn parse_playlist_id_rejects_too_few_segments() {
+        assert!(parse_spotify_playlist_id("https://open.spotify.com/playlist").is_err());
+        assert!(parse_spotify_playlist_id("https://open.spotify.com").is_err());
+        assert!(parse_spotify_playlist_id("https://open.spotify.com/").is_err());
+    }
+
+    #[test]
+    fn parse_playlist_id_rejects_non_playlist_paths() {
+        assert!(
+            parse_spotify_playlist_id("https://open.spotify.com/track/3y1VsqLEvW4vUQvIAVjT1P")
+                .is_err()
+        );
+        assert!(
+            parse_spotify_playlist_id("https://open.spotify.com/album/3y1VsqLEvW4vUQvIAVjT1P")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn parse_playlist_id_rejects_non_url_input() {
+        assert!(parse_spotify_playlist_id("not a url at all").is_err());
+    }
+
+    // --- build_search_fields ---
+
+    #[test]
+    fn build_search_fields_splits_terms_and_dedups_across_strings() {
+        // "world" appears in both strings and must only be indexed once.
+        let (terms, metaphones, n_grams) =
+            build_search_fields(&["hello world".to_string(), "world".to_string()]);
+
+        assert_eq!(sorted(terms), vec!["hello", "world"]);
+
+        // Double Metaphone: "hello" -> HL; "world" -> ARLT (primary) / FRLT (alternate).
+        assert_eq!(sorted(metaphones), vec!["ARLT", "FRLT", "HL"]);
+
+        // 2- and 3-grams of "hello" and "world", deduplicated.
+        assert_eq!(
+            sorted(n_grams),
+            vec![
+                "el", "ell", "he", "hel", "ld", "ll", "llo", "lo", "or", "orl", "rl", "rld", "wo",
+                "wor"
+            ]
+        );
+    }
+
+    #[test]
+    fn build_search_fields_empty_input() {
+        let (terms, metaphones, n_grams) = build_search_fields(&[]);
+        assert!(terms.is_empty());
+        assert!(metaphones.is_empty());
+        assert!(n_grams.is_empty());
+    }
+
+    // --- images_to_image_urls ---
+
+    fn images(urls: &[&str]) -> Vec<SpImage> {
+        urls.iter()
+            .map(|u| SpImage { url: u.to_string() })
+            .collect()
+    }
+
+    #[test]
+    fn images_to_image_urls_empty_is_none() {
+        assert!(images_to_image_urls(&[]).is_none());
+    }
+
+    #[test]
+    fn images_to_image_urls_single_image_fills_large_and_small() {
+        let result = images_to_image_urls(&images(&["a"])).unwrap();
+        assert_eq!(result.large.as_deref(), Some("a"));
+        assert_eq!(result.small.as_deref(), Some("a"));
+        assert_eq!(result.medium, None);
+    }
+
+    #[test]
+    fn images_to_image_urls_two_images_first_large_last_small() {
+        let result = images_to_image_urls(&images(&["big", "tiny"])).unwrap();
+        assert_eq!(result.large.as_deref(), Some("big"));
+        assert_eq!(result.small.as_deref(), Some("tiny"));
+        assert_eq!(result.medium, None);
+    }
+
+    #[test]
+    fn images_to_image_urls_three_images_middle_is_medium() {
+        let result = images_to_image_urls(&images(&["big", "mid", "tiny"])).unwrap();
+        assert_eq!(result.large.as_deref(), Some("big"));
+        assert_eq!(result.medium.as_deref(), Some("mid"));
+        assert_eq!(result.small.as_deref(), Some("tiny"));
+    }
+
+    #[test]
+    fn images_to_image_urls_four_images_uses_len_over_two_as_medium() {
+        // len / 2 == 2, i.e. the third image.
+        let result = images_to_image_urls(&images(&["a", "b", "c", "d"])).unwrap();
+        assert_eq!(result.large.as_deref(), Some("a"));
+        assert_eq!(result.medium.as_deref(), Some("c"));
+        assert_eq!(result.small.as_deref(), Some("d"));
+    }
+}

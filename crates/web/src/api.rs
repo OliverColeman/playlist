@@ -8,6 +8,18 @@ fn to_server_error(err: playlist_core::database::ServerError) -> ServerFnError {
     ServerFnError::new(format!("{:?}", err))
 }
 
+// Helper function to build a "not found" ServerFnError that surfaces as HTTP 404 (server only).
+// The `code` field of `ServerFnError::ServerError` becomes the HTTP response status (see
+// `impl IntoResponse for ServerFnError` in dioxus-fullstack-core).
+#[cfg(feature = "server")]
+fn not_found_error(message: String) -> ServerFnError {
+    ServerFnError::ServerError {
+        message,
+        code: 404,
+        details: None,
+    }
+}
+
 // Re-export for convenience
 pub use playlist_core::models::{
     album::Album,
@@ -57,7 +69,7 @@ pub async fn load_playlist_with_associated_data(
     let playlist = playlists
         .into_iter()
         .next()
-        .ok_or_else(|| ServerFnError::new(format!("Playlist not found: {}", playlist_id)))?;
+        .ok_or_else(|| not_found_error(format!("Playlist not found: {}", playlist_id)))?;
 
     // Load the tracks
     let tracks_by_id = if !playlist.track_ids.is_empty() {
@@ -150,7 +162,7 @@ pub async fn load_artist_with_associated_data(
         .collect();
 
     if tracks_by_id.is_empty() {
-        return Err(ServerFnError::new(format!(
+        return Err(not_found_error(format!(
             "Artist not found: {:?}",
             artist_id
         )));
@@ -237,10 +249,7 @@ pub async fn load_track_with_associated_data(
     .collect::<HashMap<String, Track>>();
 
     if linked_tracks_by_id.is_empty() {
-        return Err(ServerFnError::new(format!(
-            "Track not found: {:?}",
-            track_ids
-        )));
+        return Err(not_found_error(format!("Track not found: {:?}", track_ids)));
     }
 
     // Load all artists and albums for all tracks
@@ -302,9 +311,36 @@ pub async fn load_popular_tracks() -> Result<TrackListWithAssociatedData, Server
         .await
         .map_err(to_server_error)?;
 
+    let (sorted_track_ids, linked_track_sets) =
+        aggregate_popular_tracks(&playlists, &linked_tracks);
+
+    let track_data =
+        get_track_list_with_associated_data(sorted_track_ids, None, Some(linked_track_sets))
+            .await?;
+
+    Ok(track_data)
+}
+
+/// Pure aggregation logic for the popular-tracks endpoint.
+///
+/// Counts how many playlists each track appears in (repeated track ids within a single
+/// playlist count once), merges the counts of linked track versions into the most
+/// popular version, sorts by count descending and truncates to the top 100.
+///
+/// Both sorts break count ties by track id, so the output — including which linked
+/// version survives the merge when versions are tied — is fully deterministic
+/// regardless of input (or `HashMap` iteration) order.
+///
+/// Returns the sorted track ids together with the linked-track group for each id (a
+/// singleton set for tracks without linked versions).
+#[cfg(feature = "server")]
+fn aggregate_popular_tracks(
+    playlists: &[PlayList],
+    linked_tracks: &[LinkedTrack],
+) -> (Vec<String>, Vec<HashSet<String>>) {
     // Create a map from track id to LinkedTrack, for all tracks that appear in linked tracks
     let mut linked_tracks_map: HashMap<String, &LinkedTrack> = HashMap::new();
-    for linked_track in &linked_tracks {
+    for linked_track in linked_tracks {
         for track_id in &linked_track.track_ids {
             // Assert that we don't have duplicate linked track entries
             if linked_tracks_map.contains_key(track_id) {
@@ -328,11 +364,13 @@ pub async fn load_popular_tracks() -> Result<TrackListWithAssociatedData, Server
         }
     }
 
-    // Sort all tracks by popularity, ignoring linked versions for now
-    // This allows using the most popular version as the "main" version later when including linked tracks
+    // Sort all tracks by popularity ascending, ignoring linked versions for now.
+    // This allows using the most popular version as the "main" version later when including
+    // linked tracks (it is visited last, so it absorbs the group's counts). Ties are broken
+    // by track id so the surviving version is deterministic.
     let mut all_track_count_sorted: Vec<(String, usize)> =
         track_count_map.clone().into_iter().collect();
-    all_track_count_sorted.sort_by(|a, b| a.1.cmp(&b.1));
+    all_track_count_sorted.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
 
     // Update track_count_map to add counts from linked tracks and remove the less popular versions
     for (track_id, _count) in &all_track_count_sorted {
@@ -348,16 +386,17 @@ pub async fn load_popular_tracks() -> Result<TrackListWithAssociatedData, Server
         }
     }
 
-    // Now get the top 100 tracks, including the counts from linked versions
+    // Now get the top 100 tracks, including the counts from linked versions.
+    // Sort by count descending, breaking count ties by track id ascending.
     let mut track_count_sorted: Vec<(String, usize)> = track_count_map.into_iter().collect();
-    track_count_sorted.sort_by(|a, b| b.1.cmp(&a.1));
+    track_count_sorted.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
     track_count_sorted.truncate(100);
     let sorted_track_ids = track_count_sorted
         .iter()
         .map(|(id, _)| id.clone())
         .collect::<Vec<String>>();
 
-    let linked_tracks = sorted_track_ids
+    let linked_track_sets = sorted_track_ids
         .iter()
         .map(|track_id| {
             linked_tracks_map
@@ -367,10 +406,7 @@ pub async fn load_popular_tracks() -> Result<TrackListWithAssociatedData, Server
         })
         .collect();
 
-    let track_data =
-        get_track_list_with_associated_data(sorted_track_ids, None, Some(linked_tracks)).await?;
-
-    Ok(track_data)
+    (sorted_track_ids, linked_track_sets)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -664,4 +700,178 @@ pub async fn get_track_list_with_associated_data(
         artists_by_id,
         albums_by_id,
     })
+}
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    fn playlist(id: &str, track_ids: &[&str]) -> PlayList {
+        PlayList {
+            id: id.to_string(),
+            name: id.to_string(),
+            name_normalised: id.to_string(),
+            name_normalised_strong: id.to_string(),
+            disambiguation: None,
+            notes: None,
+            data_maybe_missing: None,
+            potential_duplicate: None,
+            needs_review: None,
+            external_service_associations: None,
+            search_terms: vec![],
+            search_double_metaphone_codes: vec![],
+            search_n_grams: vec![],
+            compiler_ids: vec![],
+            track_ids: track_ids.iter().map(|s| s.to_string()).collect(),
+            duration: 0.0,
+            user_id: "user-test".to_string(),
+            group_id: None,
+            tag_ids: None,
+            number: None,
+            date: None,
+        }
+    }
+
+    fn linked_track(id: &str, track_ids: &[&str]) -> LinkedTrack {
+        LinkedTrack {
+            id: id.to_string(),
+            track_name_normalised_strong: id.to_string(),
+            track_ids: track_ids.iter().map(|s| s.to_string()).collect(),
+            artist_ids: vec![],
+        }
+    }
+
+    fn set(ids: &[&str]) -> HashSet<String> {
+        ids.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn counts_playlist_occurrences_and_sorts_descending() {
+        let playlists = vec![
+            playlist("p1", &["track-a", "track-b"]),
+            playlist("p2", &["track-a", "track-c"]),
+            playlist("p3", &["track-a", "track-b"]),
+        ];
+
+        let (sorted_track_ids, linked_track_sets) = aggregate_popular_tracks(&playlists, &[]);
+
+        // track-a: 3, track-b: 2, track-c: 1.
+        assert_eq!(sorted_track_ids, vec!["track-a", "track-b", "track-c"]);
+        // No linked versions: each track reports a singleton group of itself.
+        assert_eq!(
+            linked_track_sets,
+            vec![set(&["track-a"]), set(&["track-b"]), set(&["track-c"])]
+        );
+    }
+
+    #[test]
+    fn duplicate_track_ids_within_a_playlist_count_once() {
+        let playlists = vec![
+            playlist("p1", &["track-a", "track-a", "track-a", "track-b"]),
+            playlist("p2", &["track-b"]),
+        ];
+
+        let (sorted_track_ids, _) = aggregate_popular_tracks(&playlists, &[]);
+
+        // track-a appears three times in p1 but counts once (1 total); track-b counts 2.
+        assert_eq!(sorted_track_ids, vec!["track-b", "track-a"]);
+    }
+
+    #[test]
+    fn linked_version_counts_merge_into_the_most_popular_version() {
+        // v1 appears in two playlists, v2 in one; they are linked versions of one song.
+        let playlists = vec![
+            playlist("p1", &["track-v1", "track-x"]),
+            playlist("p2", &["track-v1"]),
+            playlist("p3", &["track-v2"]),
+        ];
+        let linked = vec![linked_track("linked-1", &["track-v1", "track-v2"])];
+
+        let (sorted_track_ids, linked_track_sets) = aggregate_popular_tracks(&playlists, &linked);
+
+        // v2's count folds into v1 (2 + 1 = 3 > track-x's 1); v2 itself disappears.
+        assert_eq!(sorted_track_ids, vec!["track-v1", "track-x"]);
+        // The surviving version reports its full linked group.
+        assert_eq!(
+            linked_track_sets,
+            vec![set(&["track-v1", "track-v2"]), set(&["track-x"])]
+        );
+    }
+
+    #[test]
+    fn equal_counts_order_by_track_id() {
+        let playlists = vec![
+            playlist("p1", &["track-c", "track-a", "track-d"]),
+            playlist("p2", &["track-d", "track-b"]),
+        ];
+
+        let (sorted_track_ids, _) = aggregate_popular_tracks(&playlists, &[]);
+
+        // track-d has count 2; the count-1 tracks tie and order by id.
+        assert_eq!(
+            sorted_track_ids,
+            vec!["track-d", "track-a", "track-b", "track-c"]
+        );
+    }
+
+    #[test]
+    fn tied_linked_merge_survivor_is_stable_across_input_orders() {
+        // Both linked versions have count 1, so the merge survivor is decided purely by
+        // the deterministic tie-break — not by input (or HashMap iteration) order.
+        let scenario = |playlists: Vec<PlayList>, linked: Vec<LinkedTrack>| {
+            aggregate_popular_tracks(&playlists, &linked)
+        };
+
+        let baseline = scenario(
+            vec![
+                playlist("p1", &["track-v1", "track-z"]),
+                playlist("p2", &["track-v2"]),
+            ],
+            vec![linked_track("linked-1", &["track-v1", "track-v2"])],
+        );
+
+        // Same scenario with playlists and linked-group member order permuted.
+        let permuted = scenario(
+            vec![
+                playlist("p2", &["track-v2"]),
+                playlist("p1", &["track-z", "track-v1"]),
+            ],
+            vec![linked_track("linked-1", &["track-v2", "track-v1"])],
+        );
+
+        assert_eq!(baseline, permuted);
+
+        // The merged group (count 2) outranks track-z (count 1), and exactly one
+        // version of the pair survives, reporting the full linked group.
+        let (sorted_track_ids, linked_track_sets) = baseline;
+        assert_eq!(sorted_track_ids.len(), 2);
+        assert_eq!(sorted_track_ids[1], "track-z");
+        assert!(sorted_track_ids[0] == "track-v1" || sorted_track_ids[0] == "track-v2");
+        assert_eq!(
+            linked_track_sets,
+            vec![set(&["track-v1", "track-v2"]), set(&["track-z"])]
+        );
+    }
+
+    #[test]
+    fn truncates_to_the_top_100_tracks() {
+        // 105 count-1 tracks plus one count-2 track: the count-2 track leads, then the
+        // count-1 tracks in id order, cut at 100 entries total.
+        let count1_ids: Vec<String> = (0..105).map(|i| format!("track-{:03}", i)).collect();
+        let mut p1_track_ids: Vec<&str> = count1_ids.iter().map(|s| s.as_str()).collect();
+        p1_track_ids.push("track-top");
+        let playlists = vec![
+            playlist("p1", &p1_track_ids),
+            playlist("p2", &["track-top"]),
+        ];
+
+        let (sorted_track_ids, linked_track_sets) = aggregate_popular_tracks(&playlists, &[]);
+
+        assert_eq!(sorted_track_ids.len(), 100);
+        assert_eq!(linked_track_sets.len(), 100);
+        assert_eq!(sorted_track_ids[0], "track-top");
+        assert_eq!(sorted_track_ids[1], "track-000");
+        assert_eq!(sorted_track_ids[99], "track-098");
+        assert!(!sorted_track_ids.contains(&"track-099".to_string()));
+    }
 }
