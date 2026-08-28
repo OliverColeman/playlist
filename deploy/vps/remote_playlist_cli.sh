@@ -14,6 +14,8 @@
 #   ./remote_playlist_cli.sh import "https://tidal.com/browse/playlist/xxxx"
 #   ./remote_playlist_cli.sh import <uri> someUserId --name "My List" --date 2026-06-01
 #   ./remote_playlist_cli.sh set-compiler-name <compiler_id> "Fitness Marshall"
+#   ./remote_playlist_cli.sh merge compiler <keep_id> <remove_id> --dry-run
+#   ./remote_playlist_cli.sh merge artist <keep_id> <remove_id>
 #
 # Connection settings come from env vars (with sensible defaults) so they never
 # clash with the arguments forwarded to playlist-cli:
@@ -40,6 +42,7 @@ Examples:
   ./remote_playlist_cli.sh dbmigrate
   ./remote_playlist_cli.sh import <uri> [user_id] [--name <name>] [--date YYYY-MM-DD]
   ./remote_playlist_cli.sh set-compiler-name <compiler_id> "<name>"
+  ./remote_playlist_cli.sh merge <type> <keep_id> <remove_id> [--dry-run]
 
 Connection (env vars): PLAYLIST_VPS=[user@]host  PLAYLIST_SSH_PORT=22  PLAYLIST_REMOTE_DIR=playlist
 USAGE

@@ -19,7 +19,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {
-        eprintln!("Usage: {} <dbmigrate|import> [args...]", args[0]);
+        eprintln!(
+            "Usage: {} <dbmigrate|import|merge|set-compiler-name> [args...]",
+            args[0]
+        );
         std::process::exit(1);
     }
 
@@ -76,6 +79,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             commands::import_playlist::import_playlist(database, uri, user_id, name, date).await?;
             println!("Import completed successfully!");
         }
+        "merge" => {
+            use playlist_cli::commands::merge_records::RecordType;
+            const USAGE: &str = "Usage: merge <type> <keep_id> <remove_id> [--dry-run]\n\
+                 Merges the <remove_id> record into the <keep_id> record (unifying their\n\
+                 external service associations, repointing every reference, and deleting the\n\
+                 <remove_id> record), keeping the same link across services in one record.";
+
+            // Parse: positional <type> <keep_id> <remove_id> plus an optional --dry-run flag
+            // (which may appear anywhere). Because a merge deletes a record, unknown flags and
+            // extra arguments are rejected rather than ignored — so a mistyped `--dry-run`
+            // (e.g. `--dryrun`) can never silently fall through to a real, destructive run.
+            let mut positionals: Vec<String> = Vec::new();
+            let mut dry_run = false;
+            for arg in &args[2..] {
+                match arg.as_str() {
+                    "--dry-run" => dry_run = true,
+                    other if other.starts_with('-') => {
+                        eprintln!("Unknown option \"{}\".\n{}", other, USAGE);
+                        std::process::exit(1);
+                    }
+                    _ => positionals.push(arg.clone()),
+                }
+            }
+
+            if positionals.len() != 3 {
+                eprintln!(
+                    "Expected exactly <type> <keep_id> <remove_id>, got {} positional argument(s).\n{}\nValid types: {}.",
+                    positionals.len(),
+                    USAGE,
+                    RecordType::VALID
+                );
+                std::process::exit(1);
+            }
+            let type_str = &positionals[0];
+            let keep_id = &positionals[1];
+            let remove_id = &positionals[2];
+
+            commands::merge_records::merge_records(database, type_str, keep_id, remove_id, dry_run)
+                .await?;
+        }
         "set-compiler-name" => {
             if args.len() < 4 {
                 eprintln!("Usage: {} set-compiler-name <compiler_id> <name>", args[0]);
@@ -87,7 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             eprintln!(
-                "Unknown subcommand: {}. Use 'dbmigrate', 'import' or 'set-compiler-name'.",
+                "Unknown subcommand: {}. Use 'dbmigrate', 'import', 'merge' or 'set-compiler-name'.",
                 subcommand
             );
             std::process::exit(1);

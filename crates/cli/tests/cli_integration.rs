@@ -14,7 +14,8 @@ use futures::TryStreamExt;
 use mongodb::Database;
 use mongodb::bson::doc;
 use playlist_cli::commands::{
-    import_playlist::import_playlist, migrate, set_compiler_name::set_compiler_name,
+    import_playlist::import_playlist, merge_records::merge_records, migrate,
+    set_compiler_name::set_compiler_name,
 };
 use playlist_core::models::{
     ExternalServiceAssociation, MusicItemBase,
@@ -1368,8 +1369,554 @@ async fn set_compiler_name_errors_for_unknown_compiler_id() {
 }
 
 // ---------------------------------------------------------------------------
+// merge_records
+// ---------------------------------------------------------------------------
+
+fn spotify_assoc(id: &str) -> ExternalServiceAssociation {
+    ExternalServiceAssociation::Spotify {
+        id: id.to_string(),
+        image_urls: None,
+    }
+}
+
+fn tidal_assoc(id: &str) -> ExternalServiceAssociation {
+    ExternalServiceAssociation::Tidal {
+        id: id.to_string(),
+        image_urls: None,
+    }
+}
+
+fn merge_compiler(id: &str, name: &str, assoc: ExternalServiceAssociation) -> Compiler {
+    Compiler {
+        id: id.to_string(),
+        name: name.to_string(),
+        name_normalised: playlist_core::normalise_name(name),
+        name_normalised_strong: playlist_core::normalise_name_strong(name),
+        disambiguation: None,
+        notes: None,
+        data_maybe_missing: None,
+        potential_duplicate: None,
+        needs_review: None,
+        external_service_associations: Some(vec![assoc]),
+        search_terms: vec![],
+        search_double_metaphone_codes: vec![],
+        search_n_grams: vec![],
+    }
+}
+
+fn merge_artist(id: &str, name: &str, assoc: ExternalServiceAssociation) -> Artist {
+    Artist {
+        id: id.to_string(),
+        name: name.to_string(),
+        name_normalised: playlist_core::normalise_name(name),
+        name_normalised_strong: playlist_core::normalise_name_strong(name),
+        disambiguation: None,
+        notes: None,
+        data_maybe_missing: None,
+        potential_duplicate: None,
+        needs_review: None,
+        external_service_associations: Some(vec![assoc]),
+        search_terms: vec![],
+        search_double_metaphone_codes: vec![],
+        search_n_grams: vec![],
+        alt_names: None,
+    }
+}
+
+fn merge_album(
+    id: &str,
+    name: &str,
+    artist_ids: &[&str],
+    assoc: ExternalServiceAssociation,
+) -> Album {
+    Album {
+        id: id.to_string(),
+        name: name.to_string(),
+        name_normalised: playlist_core::normalise_name(name),
+        name_normalised_strong: playlist_core::normalise_name_strong(name),
+        disambiguation: None,
+        notes: None,
+        data_maybe_missing: None,
+        potential_duplicate: None,
+        needs_review: None,
+        external_service_associations: Some(vec![assoc]),
+        search_terms: vec![],
+        search_double_metaphone_codes: vec![],
+        search_n_grams: vec![],
+        artist_ids: artist_ids.iter().map(|s| s.to_string()).collect(),
+    }
+}
+
+fn merge_track(id: &str, name: &str, assoc: ExternalServiceAssociation) -> Track {
+    Track {
+        id: id.to_string(),
+        name: name.to_string(),
+        name_normalised: playlist_core::normalise_name(name),
+        name_normalised_strong: playlist_core::normalise_name_strong(name),
+        disambiguation: None,
+        notes: None,
+        data_maybe_missing: None,
+        potential_duplicate: None,
+        needs_review: None,
+        external_service_associations: Some(vec![assoc]),
+        search_terms: vec![],
+        search_double_metaphone_codes: vec![],
+        search_n_grams: vec![],
+        artist_ids: vec![],
+        album_id: None,
+        duration: None,
+    }
+}
+
+fn merge_playlist(id: &str, compiler_ids: &[&str], track_ids: &[&str]) -> PlayList {
+    PlayList {
+        id: id.to_string(),
+        name: format!("Playlist {id}"),
+        name_normalised: format!("playlist {id}"),
+        name_normalised_strong: format!("playlist {id}"),
+        disambiguation: None,
+        notes: None,
+        data_maybe_missing: None,
+        potential_duplicate: None,
+        needs_review: None,
+        external_service_associations: None,
+        search_terms: vec![],
+        search_double_metaphone_codes: vec![],
+        search_n_grams: vec![],
+        compiler_ids: compiler_ids.iter().map(|s| s.to_string()).collect(),
+        track_ids: track_ids.iter().map(|s| s.to_string()).collect(),
+        duration: 0.0,
+        user_id: "u1".to_string(),
+        group_id: None,
+        tag_ids: None,
+        number: None,
+        date: None,
+    }
+}
+
+async fn compiler_ids_of(db: &Database, playlist_id: &str) -> Vec<String> {
+    let playlists: Vec<PlayList> = collect(db, "playlist").await;
+    playlists
+        .into_iter()
+        .find(|p| p.id == playlist_id)
+        .unwrap_or_else(|| panic!("playlist {playlist_id} not found"))
+        .compiler_ids
+}
+
+async fn track_ids_of(db: &Database, playlist_id: &str) -> Vec<String> {
+    let playlists: Vec<PlayList> = collect(db, "playlist").await;
+    playlists
+        .into_iter()
+        .find(|p| p.id == playlist_id)
+        .unwrap_or_else(|| panic!("playlist {playlist_id} not found"))
+        .track_ids
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn merge_compiler_unifies_associations_and_repoints_playlists() {
+    let db = fresh_db("playlist_test_cli_merge_compiler").await;
+    db.collection::<Compiler>("compiler")
+        .insert_many(vec![
+            merge_compiler("cKeep", "DJ Keep", spotify_assoc("sp_keep")),
+            merge_compiler("cRemove", "DJ Remove", tidal_assoc("td_remove")),
+        ])
+        .await
+        .unwrap();
+    db.collection::<PlayList>("playlist")
+        .insert_many(vec![
+            merge_playlist("pKeep", &["cKeep"], &[]),
+            merge_playlist("pRemove", &["cRemove", "other"], &[]),
+            merge_playlist("pBoth", &["cKeep", "cRemove"], &[]),
+        ])
+        .await
+        .unwrap();
+
+    merge_records(db.clone(), "compiler", "cKeep", "cRemove", false)
+        .await
+        .expect("merge failed");
+
+    // Only the kept compiler remains, carrying both services' associations.
+    let compilers: Vec<Compiler> = collect(&db, "compiler").await;
+    assert_eq!(compilers.len(), 1);
+    let kept = &compilers[0];
+    assert_eq!(kept.id, "cKeep");
+    assert_eq!(spotify_id(kept).as_deref(), Some("sp_keep"));
+    assert_eq!(tidal_id(kept).as_deref(), Some("td_remove"));
+
+    // Every reference to the removed compiler now points at the kept one.
+    assert_eq!(compiler_ids_of(&db, "pKeep").await, vec!["cKeep"]);
+    assert_eq!(
+        compiler_ids_of(&db, "pRemove").await,
+        vec!["cKeep", "other"]
+    );
+    // A playlist that referenced both collapses to a single entry for the kept compiler.
+    assert_eq!(compiler_ids_of(&db, "pBoth").await, vec!["cKeep"]);
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn merge_artist_repoints_all_holders_and_records_alt_name() {
+    let db = fresh_db("playlist_test_cli_merge_artist").await;
+    // The kept artist carries a Spotify and a MusicBrainz association plus one alternate name.
+    let mut keep = merge_artist("aKeep", "The Beatles", spotify_assoc("sp_keep"));
+    keep.external_service_associations.as_mut().unwrap().push(
+        ExternalServiceAssociation::MusicBrainz {
+            id: "mb_keep".to_string(),
+        },
+    );
+    keep.alt_names = Some(vec!["Fab Four".to_string()]);
+    // The removed artist is flagged for review and has its own alternate spelling.
+    let mut remove = merge_artist("aRemove", "Beatles", tidal_assoc("td_remove"));
+    remove.alt_names = Some(vec!["The Fab Four".to_string()]);
+    remove.needs_review = Some(true);
+    db.collection::<Artist>("artist")
+        .insert_many(vec![keep, remove])
+        .await
+        .unwrap();
+    db.collection::<Track>("track")
+        .insert_many(vec![
+            make_track("t1", "Track One", &["aRemove", "ax"]),
+            make_track("t2", "Track Two", &["aKeep", "aRemove"]),
+        ])
+        .await
+        .unwrap();
+    db.collection::<Album>("album")
+        .insert_one(merge_album(
+            "al1",
+            "Album One",
+            &["aRemove"],
+            spotify_assoc("sp_al"),
+        ))
+        .await
+        .unwrap();
+    db.collection::<LinkedTrack>("linked_track")
+        .insert_one(LinkedTrack {
+            id: "lt1".to_string(),
+            track_name_normalised_strong: "track".to_string(),
+            track_ids: vec!["t1".to_string(), "t2".to_string()],
+            artist_ids: vec!["aRemove".to_string(), "aKeep".to_string()],
+        })
+        .await
+        .unwrap();
+
+    merge_records(db.clone(), "artist", "aKeep", "aRemove", false)
+        .await
+        .expect("merge failed");
+
+    let artists: Vec<Artist> = collect(&db, "artist").await;
+    assert_eq!(artists.len(), 1);
+    let kept = &artists[0];
+    assert_eq!(kept.id, "aKeep");
+    // All three associations (kept Spotify + MusicBrainz, removed Tidal) end up on the survivor.
+    assert_eq!(spotify_id(kept).as_deref(), Some("sp_keep"));
+    assert_eq!(tidal_id(kept).as_deref(), Some("td_remove"));
+    assert_eq!(
+        kept.external_service_associations.as_ref().unwrap().len(),
+        3
+    );
+    let has_musicbrainz = kept
+        .external_service_associations
+        .as_ref()
+        .unwrap()
+        .iter()
+        .any(|a| matches!(a, ExternalServiceAssociation::MusicBrainz { id } if id == "mb_keep"));
+    assert!(has_musicbrainz, "kept the MusicBrainz association");
+    // Alternates from both records are unioned: the kept artist's own alternate, then the
+    // removed artist's name, then the removed artist's alternate.
+    assert_eq!(
+        kept.alt_names.clone().unwrap_or_default(),
+        vec!["Fab Four", "Beatles", "The Fab Four"]
+    );
+    // The search index is rebuilt to include the alternates, so the merged artist is findable
+    // by the alternate spellings too: "the"/"beatles" come from the kept name, while "fab" and
+    // "four" are contributed only by the merged-in alternate names.
+    for term in ["beatles", "fab", "four", "the"] {
+        assert!(
+            kept.search_terms.iter().any(|t| t == term),
+            "search_terms should contain {term:?}: {:?}",
+            kept.search_terms
+        );
+    }
+    // The removed record's review flag is carried forward.
+    assert_eq!(kept.needs_review, Some(true));
+
+    let tracks: Vec<Track> = collect(&db, "track").await;
+    let t1 = tracks.iter().find(|t| t.id == "t1").unwrap();
+    let t2 = tracks.iter().find(|t| t.id == "t2").unwrap();
+    assert_eq!(t1.artist_ids, vec!["aKeep", "ax"]);
+    // t2 referenced both, so the two references collapse into one.
+    assert_eq!(t2.artist_ids, vec!["aKeep"]);
+
+    let albums: Vec<Album> = collect(&db, "album").await;
+    assert_eq!(albums[0].artist_ids, vec!["aKeep"]);
+
+    let linked: Vec<LinkedTrack> = collect(&db, "linked_track").await;
+    assert_eq!(linked[0].artist_ids, vec!["aKeep"]);
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn merge_album_repoints_track_album_id() {
+    let db = fresh_db("playlist_test_cli_merge_album").await;
+    db.collection::<Album>("album")
+        .insert_many(vec![
+            merge_album("alKeep", "Album", &[], spotify_assoc("sp_keep")),
+            merge_album("alRemove", "Album", &[], tidal_assoc("td_remove")),
+        ])
+        .await
+        .unwrap();
+    let mut t1 = make_track("t1", "Track One", &[]);
+    t1.album_id = Some("alRemove".to_string());
+    let mut t2 = make_track("t2", "Track Two", &[]);
+    t2.album_id = Some("alKeep".to_string());
+    let t3 = make_track("t3", "Track Three", &[]); // album_id None
+    db.collection::<Track>("track")
+        .insert_many(vec![t1, t2, t3])
+        .await
+        .unwrap();
+
+    merge_records(db.clone(), "album", "alKeep", "alRemove", false)
+        .await
+        .expect("merge failed");
+
+    let albums: Vec<Album> = collect(&db, "album").await;
+    assert_eq!(albums.len(), 1);
+    assert_eq!(albums[0].id, "alKeep");
+    assert_eq!(spotify_id(&albums[0]).as_deref(), Some("sp_keep"));
+    assert_eq!(tidal_id(&albums[0]).as_deref(), Some("td_remove"));
+
+    let tracks: Vec<Track> = collect(&db, "track").await;
+    let album_id = |id: &str| tracks.iter().find(|t| t.id == id).unwrap().album_id.clone();
+    assert_eq!(album_id("t1").as_deref(), Some("alKeep"));
+    assert_eq!(album_id("t2").as_deref(), Some("alKeep"));
+    assert_eq!(album_id("t3"), None);
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn merge_track_repoints_playlists_and_linked_tracks() {
+    let db = fresh_db("playlist_test_cli_merge_track").await;
+    db.collection::<Track>("track")
+        .insert_many(vec![
+            merge_track("tKeep", "Song", spotify_assoc("sp_keep")),
+            merge_track("tRemove", "Song", tidal_assoc("td_remove")),
+        ])
+        .await
+        .unwrap();
+    db.collection::<PlayList>("playlist")
+        .insert_many(vec![
+            merge_playlist("p1", &[], &["tRemove", "tx"]),
+            merge_playlist("p2", &[], &["tKeep", "tRemove"]),
+        ])
+        .await
+        .unwrap();
+    db.collection::<LinkedTrack>("linked_track")
+        .insert_one(LinkedTrack {
+            id: "lt1".to_string(),
+            track_name_normalised_strong: "song".to_string(),
+            track_ids: vec!["tRemove".to_string(), "tKeep".to_string()],
+            artist_ids: vec![],
+        })
+        .await
+        .unwrap();
+
+    merge_records(db.clone(), "track", "tKeep", "tRemove", false)
+        .await
+        .expect("merge failed");
+
+    let tracks: Vec<Track> = collect(&db, "track").await;
+    assert_eq!(tracks.len(), 1);
+    assert_eq!(tracks[0].id, "tKeep");
+    assert_eq!(spotify_id(&tracks[0]).as_deref(), Some("sp_keep"));
+    assert_eq!(tidal_id(&tracks[0]).as_deref(), Some("td_remove"));
+
+    assert_eq!(track_ids_of(&db, "p1").await, vec!["tKeep", "tx"]);
+    assert_eq!(track_ids_of(&db, "p2").await, vec!["tKeep"]);
+
+    let linked: Vec<LinkedTrack> = collect(&db, "linked_track").await;
+    assert_eq!(linked[0].track_ids, vec!["tKeep"]);
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn merge_playlist_unifies_associations_with_no_references_to_repoint() {
+    let db = fresh_db("playlist_test_cli_merge_playlist").await;
+    let mut keep = merge_playlist("pKeep", &[], &["t1"]);
+    keep.external_service_associations = Some(vec![spotify_assoc("sp_keep")]);
+    let mut remove = merge_playlist("pRemove", &[], &["t2"]);
+    remove.external_service_associations = Some(vec![tidal_assoc("td_remove")]);
+    db.collection::<PlayList>("playlist")
+        .insert_many(vec![keep, remove])
+        .await
+        .unwrap();
+
+    merge_records(db.clone(), "playlist", "pKeep", "pRemove", false)
+        .await
+        .expect("merge failed");
+
+    let playlists: Vec<PlayList> = collect(&db, "playlist").await;
+    assert_eq!(playlists.len(), 1);
+    let kept = &playlists[0];
+    assert_eq!(kept.id, "pKeep");
+    assert_eq!(spotify_id(kept).as_deref(), Some("sp_keep"));
+    assert_eq!(tidal_id(kept).as_deref(), Some("td_remove"));
+    // The kept playlist's own track list is preserved unchanged.
+    assert_eq!(kept.track_ids, vec!["t1"]);
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn merge_records_with_nothing_to_write_still_deletes_the_removed_record() {
+    // Neither record carries associations, disambiguation or notes, so the kept record needs
+    // no update at all. The merge must still delete the removed record (and not error on an
+    // empty update).
+    let db = fresh_db("playlist_test_cli_merge_empty_set").await;
+    db.collection::<PlayList>("playlist")
+        .insert_many(vec![
+            merge_playlist("pKeep", &[], &[]),
+            merge_playlist("pRemove", &[], &[]),
+        ])
+        .await
+        .unwrap();
+
+    merge_records(db.clone(), "playlist", "pKeep", "pRemove", false)
+        .await
+        .expect("merge failed");
+
+    let playlists: Vec<PlayList> = collect(&db, "playlist").await;
+    assert_eq!(playlists.len(), 1);
+    assert_eq!(playlists[0].id, "pKeep");
+    assert!(playlists[0].external_service_associations.is_none());
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn merge_dry_run_reports_but_writes_nothing() {
+    let db = fresh_db("playlist_test_cli_merge_dry_run").await;
+    db.collection::<Compiler>("compiler")
+        .insert_many(vec![
+            merge_compiler("cKeep", "DJ Keep", spotify_assoc("sp_keep")),
+            merge_compiler("cRemove", "DJ Remove", tidal_assoc("td_remove")),
+        ])
+        .await
+        .unwrap();
+    db.collection::<PlayList>("playlist")
+        .insert_one(merge_playlist("p1", &["cRemove"], &[]))
+        .await
+        .unwrap();
+
+    merge_records(db.clone(), "compiler", "cKeep", "cRemove", true)
+        .await
+        .expect("dry-run merge failed");
+
+    // Both compilers still exist, unchanged, and the reference still points at the removed one.
+    let compilers: Vec<Compiler> = collect(&db, "compiler").await;
+    assert_eq!(compilers.len(), 2);
+    let kept = compilers.iter().find(|c| c.id == "cKeep").unwrap();
+    assert_eq!(tidal_id(kept), None, "dry run must not add associations");
+    assert_eq!(compiler_ids_of(&db, "p1").await, vec!["cRemove"]);
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn merge_rejects_unknown_type() {
+    let db = fresh_db("playlist_test_cli_merge_unknown_type").await;
+    let error = merge_records(db.clone(), "group", "a", "b", false)
+        .await
+        .expect_err("an unknown type must fail");
+    assert!(
+        error.to_string().contains("Unknown record type"),
+        "unexpected error: {error}"
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn merge_rejects_identical_ids() {
+    let db = fresh_db("playlist_test_cli_merge_same_id").await;
+    let error = merge_records(db.clone(), "compiler", "same", "same", false)
+        .await
+        .expect_err("identical ids must fail");
+    assert!(
+        error.to_string().contains("must be different"),
+        "unexpected error: {error}"
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn merge_errors_when_a_record_is_missing() {
+    let db = fresh_db("playlist_test_cli_merge_missing").await;
+    db.collection::<Compiler>("compiler")
+        .insert_one(merge_compiler("cKeep", "DJ Keep", spotify_assoc("sp_keep")))
+        .await
+        .unwrap();
+
+    // Missing keep record.
+    let error = merge_records(db.clone(), "compiler", "nope", "cKeep", false)
+        .await
+        .expect_err("a missing keep record must fail");
+    assert!(
+        error.to_string().contains("record to keep"),
+        "unexpected error: {error}"
+    );
+
+    // Missing remove record.
+    let error = merge_records(db.clone(), "compiler", "cKeep", "nope", false)
+        .await
+        .expect_err("a missing remove record must fail");
+    assert!(
+        error.to_string().contains("record to remove"),
+        "unexpected error: {error}"
+    );
+
+    // The existing compiler is untouched by the failed merges.
+    let compilers: Vec<Compiler> = collect(&db, "compiler").await;
+    assert_eq!(compilers.len(), 1);
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn merge_fills_missing_fields_but_keeps_the_kept_records_own() {
+    let db = fresh_db("playlist_test_cli_merge_fill").await;
+    // Keep has its own notes but no disambiguation; remove has both.
+    let mut keep = merge_compiler("cKeep", "DJ Keep", spotify_assoc("sp_keep"));
+    keep.notes = Some("keep notes".to_string());
+    let mut remove = merge_compiler("cRemove", "DJ Remove", tidal_assoc("td_remove"));
+    remove.notes = Some("remove notes".to_string());
+    remove.disambiguation = Some("the one from Tidal".to_string());
+    db.collection::<Compiler>("compiler")
+        .insert_many(vec![keep, remove])
+        .await
+        .unwrap();
+
+    merge_records(db.clone(), "compiler", "cKeep", "cRemove", false)
+        .await
+        .expect("merge failed");
+
+    let compilers: Vec<Compiler> = collect(&db, "compiler").await;
+    assert_eq!(compilers.len(), 1);
+    let kept = &compilers[0];
+    // The kept record's own notes are preserved (not overwritten by the removed record's).
+    assert_eq!(kept.notes.as_deref(), Some("keep notes"));
+    // Disambiguation, absent on the kept record, is filled from the removed record.
+    assert_eq!(kept.disambiguation.as_deref(), Some("the one from Tidal"));
+}
+
+// ---------------------------------------------------------------------------
 // CLI binary
 // ---------------------------------------------------------------------------
+
+/// Run the `playlist-cli` binary with the database environment pointed at `db_name`.
+fn run_cli(db_name: &str, args: &[&str]) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_playlist-cli"))
+        .args(args)
+        .env("DB_CONNECTION_STRING", MONGO_URI)
+        .env("DB_NAME", db_name)
+        .output()
+        .expect("failed to run playlist-cli binary")
+}
 
 #[tokio::test]
 #[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
@@ -1380,4 +1927,79 @@ async fn cli_without_args_prints_usage_and_exits_nonzero() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Usage:"), "stderr was: {stderr}");
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn cli_merge_rejects_a_mistyped_dry_run_flag_without_merging() {
+    // A mistyped --dry-run must NOT silently fall through to a real, destructive merge.
+    let db = fresh_db("playlist_test_cli_merge_bin_typo").await;
+    db.collection::<Compiler>("compiler")
+        .insert_many(vec![
+            merge_compiler("cKeep", "DJ Keep", spotify_assoc("sp_keep")),
+            merge_compiler("cRemove", "DJ Remove", tidal_assoc("td_remove")),
+        ])
+        .await
+        .unwrap();
+
+    let output = run_cli(
+        "playlist_test_cli_merge_bin_typo",
+        &["merge", "compiler", "cKeep", "cRemove", "--dryrun"],
+    );
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Unknown option"), "stderr was: {stderr}");
+    // Nothing was merged or deleted.
+    let compilers: Vec<Compiler> = collect(&db, "compiler").await;
+    assert_eq!(compilers.len(), 2);
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn cli_merge_rejects_wrong_positional_count() {
+    let db_name = "playlist_test_cli_merge_bin_arity";
+    let _db = fresh_db(db_name).await;
+
+    let too_few = run_cli(db_name, &["merge", "compiler", "onlyone"]);
+    assert!(!too_few.status.success());
+    assert!(
+        String::from_utf8_lossy(&too_few.stderr).contains("Expected exactly"),
+        "stderr was: {}",
+        String::from_utf8_lossy(&too_few.stderr)
+    );
+
+    let too_many = run_cli(db_name, &["merge", "compiler", "a", "b", "c"]);
+    assert!(!too_many.status.success());
+    assert!(
+        String::from_utf8_lossy(&too_many.stderr).contains("Expected exactly"),
+        "stderr was: {}",
+        String::from_utf8_lossy(&too_many.stderr)
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn cli_merge_accepts_dry_run_flag_in_leading_position() {
+    let db_name = "playlist_test_cli_merge_bin_dryrun";
+    let db = fresh_db(db_name).await;
+    db.collection::<Compiler>("compiler")
+        .insert_many(vec![
+            merge_compiler("cKeep", "DJ Keep", spotify_assoc("sp_keep")),
+            merge_compiler("cRemove", "DJ Remove", tidal_assoc("td_remove")),
+        ])
+        .await
+        .unwrap();
+
+    // --dry-run before the positionals must be accepted and must not write anything.
+    let output = run_cli(
+        db_name,
+        &["merge", "--dry-run", "compiler", "cKeep", "cRemove"],
+    );
+    assert!(
+        output.status.success(),
+        "stderr was: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let compilers: Vec<Compiler> = collect(&db, "compiler").await;
+    assert_eq!(compilers.len(), 2, "dry-run must not delete the record");
 }

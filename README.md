@@ -14,16 +14,16 @@ This is a Cargo workspace with three crates:
 
 ```
 crates/
-├─ core/  # playlist-core — shared library: config, MongoDB access, data models, errors
-├─ web/   # playlist-web  — Dioxus fullstack web app (UI + server functions)
-└─ cli/   # playlist-cli  — command-line tools: music service import, DB migrations
+├─ core/  # playlist-core - shared library: config, MongoDB access, data models, errors
+├─ web/   # playlist-web  - Dioxus fullstack web app (UI + server functions)
+└─ cli/   # playlist-cli  - command-line tools: music service import, DB migrations
 ```
 
 ### `playlist-core`
 Shared library used by both the web app and the CLI. Contains the database
 configuration and connection ([config.rs](crates/core/src/config.rs),
 [database.rs](crates/core/src/database.rs)), the data models
-([models/](crates/core/src/models/) — Album, Artist, Compiler, Playlist, Track), and
+([models/](crates/core/src/models/) - Album, Artist, Compiler, Playlist, Track), and
 common error types. Server-only functionality (MongoDB, indexing) is gated behind the
 `server` feature.
 
@@ -32,7 +32,7 @@ The Dioxus web application. Routes are defined in [main.rs](crates/web/src/main.
 
 | Route | View |
 | --- | --- |
-| `/` | Home — list of playlists |
+| `/` | Home - list of playlists |
 | `/playlist/:id` | A single playlist |
 | `/compiler` and `/compiler/:id` | Playlist compilers |
 | `/track/:id` | A single track |
@@ -46,12 +46,21 @@ Server functions live in [api.rs](crates/web/src/api.rs) and run only when built
 ### `playlist-cli`
 Command-line tools ([main.rs](crates/cli/src/main.rs)):
 
-- `dbmigrate` — run database migrations.
-- `import <playlist URI> [user_id] [--name <name>] [--date <YYYY-MM-DD>]` — import a
+- `dbmigrate` - run database migrations.
+- `import <playlist URI> [user_id] [--name <name>] [--date <YYYY-MM-DD>]` - import a
   playlist from a music service.
+- `set-compiler-name <compiler_id> <name>` - rename an existing compiler, keeping its
+  normalised-name and search-index fields in sync.
+- `merge <type> <keep_id> <remove_id> [--dry-run]` - merge two records of the same type
+  into one. `<type>` is one of `artist`, `album`, `track`, `compiler` or `playlist`. The
+  same real-world entity imported from two services (for example Spotify and Tidal) becomes
+  two records, each keyed on its own service id; this folds the `<remove_id>` record into
+  the `<keep_id>` record - unifying their external service associations so one record
+  carries both services' ids and images, repointing every reference to the removed record,
+  and deleting it. `--dry-run` reports what would change without writing anything.
 
 Playlist dates are interpreted and displayed in the canonical `Australia/Sydney` timezone
-(`playlist_core::TIMEZONE` — the sessions happen in Newcastle, Australia): the `--date`
+(`playlist_core::TIMEZONE` - the sessions happen in Newcastle, Australia): the `--date`
 value is parsed as midnight in that zone and the web UI formats dates in it, regardless of
 the host machine's timezone.
 
@@ -59,8 +68,8 @@ the host machine's timezone.
 
 Both the web app and CLI require a MongoDB connection:
 
-- `DB_CONNECTION_STRING` — MongoDB connection string
-- `DB_NAME` — database name
+- `DB_CONNECTION_STRING` - MongoDB connection string
+- `DB_NAME` - database name
 
 The CLI `import` command additionally needs client-credentials for the music service the
 playlist URL belongs to. The service is chosen automatically from the URL's host.
@@ -68,12 +77,12 @@ playlist URL belongs to. The service is chosen automatically from the URL's host
 Spotify (`open.spotify.com` / `play.spotify.com` URLs):
 
 - `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`
-- `SPOTIFY_MARKET` — optional, defaults to `AU`
+- `SPOTIFY_MARKET` - optional, defaults to `AU`
 
 Tidal (`tidal.com` / `listen.tidal.com` URLs):
 
 - `TIDAL_CLIENT_ID` / `TIDAL_CLIENT_SECRET`
-- `TIDAL_COUNTRY` — optional, defaults to `AU`
+- `TIDAL_COUNTRY` - optional, defaults to `AU`
 
 Only the credentials for the service you are importing from are required. For local
 development these are read from `dev/run_local/.local.env` (gitignored).
@@ -103,6 +112,7 @@ To run things manually instead (with the env vars set yourself):
 dx serve -p playlist-web                 # web app
 cargo run -p playlist-cli dbmigrate      # migrations
 cargo run -p playlist-cli import <uri>   # import
+cargo run -p playlist-cli merge <type> <keep_id> <remove_id>   # merge duplicate records
 ```
 
 ## Building and testing
@@ -137,7 +147,7 @@ run so runs are idempotent:
 | Layer | Database(s) |
 | --- | --- |
 | core integration tests | `playlist_test_core` |
-| cli integration tests | `playlist_test_cli_*` — one suffixed database per test, e.g. `playlist_test_cli_import`, `playlist_test_cli_migrate` |
+| cli integration tests | `playlist_test_cli_*` - one suffixed database per test, e.g. `playlist_test_cli_import`, `playlist_test_cli_migrate` |
 | e2e tests | `playlist_e2e` |
 
 Test databases are cleaned at the *start* of the next run, not at exit, so they are
@@ -163,7 +173,7 @@ cargo test -p playlist-web --features server
 `playlist_e2e` database with fixtures (see `e2e/fixtures/data.ts`), start the
 pre-built fullstack server binary (`target/dx/playlist-web/debug/web/playlist-web`)
 on port 8811, and exercise the rendered pages and the HTTP API.
-`dev/test/run_e2e.sh` needs only Node.js (22+) — it installs the npm dependencies and
+`dev/test/run_e2e.sh` needs only Node.js (22+) - it installs the npm dependencies and
 the Playwright Chromium browser itself, and (re)builds the server binary with
 `dx build -p playlist-web --fullstack` when it is missing or older than the sources
 under `crates/web/src`, `crates/core/src` or `crates/web/assets` (set `SKIP_BUILD=1`
@@ -177,7 +187,7 @@ SKIP_BUILD=1 dev/test/run_e2e.sh               # skip the binary freshness check
 ```
 
 Because the e2e suite *drops and re-seeds* its database, it refuses to run against
-any database whose name does not start with `playlist_e2e` (see `e2e/db-config.ts`) —
+any database whose name does not start with `playlist_e2e` (see `e2e/db-config.ts`) -
 ambient `DB_NAME`/`DB_CONNECTION_STRING` values from your shell cannot silently
 redirect it at a real database. To deliberately target a different MongoDB instance
 or database, set `E2E_DB_CONNECTION_STRING` and/or `E2E_DB_NAME` (the
@@ -186,7 +196,7 @@ or database, set `E2E_DB_CONNECTION_STRING` and/or `E2E_DB_NAME` (the
 ## Styling
 
 Styling uses Tailwind CSS plus a SCSS stylesheet. As of Dioxus 0.7, Tailwind is built
-automatically by `dx serve` — no manual CLI install needed. The input/output paths are
+automatically by `dx serve` - no manual CLI install needed. The input/output paths are
 configured in [Dioxus.toml](Dioxus.toml):
 
 ```toml

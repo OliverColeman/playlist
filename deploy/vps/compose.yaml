@@ -27,17 +27,23 @@ services:
     # No published ports — only Caddy reaches it, over the internal network.
     expose:
       - "8080"
+    # All credentials and per-service settings (SITE_ADDRESS, the music-service
+    # client IDs/secrets, market/country, DB_NAME) come straight from
+    # .playlist.env, so adding a new credential there needs no change here. The
+    # command-line tool inherits this same environment via `docker compose exec
+    # web playlist-cli ...`.
+    env_file:
+      - .playlist.env
+    # Fixed infrastructure settings. These take precedence over any same-named
+    # key in the env file, so the container always binds all interfaces and
+    # reaches MongoDB on the internal compose network.
     environment:
       IP: 0.0.0.0
       PORT: 8080
       DB_CONNECTION_STRING: mongodb://mongodb:27017
+      # Required by the app (no built-in default); defaulted here so a bare env
+      # file still works.
       DB_NAME: ${DB_NAME:-justdance}
-      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
-      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
-      SPOTIFY_MARKET: ${SPOTIFY_MARKET:-AU}
-      TIDAL_CLIENT_ID: ${TIDAL_CLIENT_ID:-}
-      TIDAL_CLIENT_SECRET: ${TIDAL_CLIENT_SECRET:-}
-      TIDAL_COUNTRY: ${TIDAL_COUNTRY:-AU}
     depends_on:
       mongodb:
         condition: service_healthy
