@@ -11,6 +11,7 @@
 # Examples:
 #   ./remote_playlist_cli.sh dbmigrate
 #   ./remote_playlist_cli.sh import "https://open.spotify.com/playlist/xxxx"
+#   ./remote_playlist_cli.sh import "https://tidal.com/browse/playlist/xxxx"
 #   ./remote_playlist_cli.sh import <uri> someUserId --name "My List" --date 2026-06-01
 #   ./remote_playlist_cli.sh set-compiler-name <compiler_id> "Fitness Marshall"
 #

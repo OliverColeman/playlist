@@ -6,12 +6,10 @@ pub fn MusicItemImage<T: MusicItem + PartialEq + 'static>(music_item: T) -> Elem
     let image_urls: Option<Option<playlist_core::models::ImageUrls>> = music_item
         .external_service_associations()
         .and_then(|associations| {
-            associations.iter().find_map(|assoc| {
-                if let ExternalServiceAssociation::Spotify { id, image_urls } = assoc {
-                    Some(image_urls.clone())
-                } else {
-                    None
-                }
+            associations.iter().find_map(|assoc| match assoc {
+                ExternalServiceAssociation::Spotify { image_urls, .. }
+                | ExternalServiceAssociation::Tidal { image_urls, .. } => Some(image_urls.clone()),
+                ExternalServiceAssociation::MusicBrainz { .. } => None,
             })
         });
 

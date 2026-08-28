@@ -62,12 +62,24 @@ Both the web app and CLI require a MongoDB connection:
 - `DB_CONNECTION_STRING` — MongoDB connection string
 - `DB_NAME` — database name
 
-The CLI `import` command additionally needs music service client-credentials, eg for Spotify:
+The CLI `import` command additionally needs client-credentials for the music service the
+playlist URL belongs to. The service is chosen automatically from the URL's host.
+
+Spotify (`open.spotify.com` / `play.spotify.com` URLs):
 
 - `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`
 - `SPOTIFY_MARKET` — optional, defaults to `AU`
 
-For local development these are read from `dev/run_local/.local.env` (gitignored).
+Tidal (`tidal.com` / `listen.tidal.com` URLs):
+
+- `TIDAL_CLIENT_ID` / `TIDAL_CLIENT_SECRET`
+- `TIDAL_COUNTRY` — optional, defaults to `AU`
+
+Only the credentials for the service you are importing from are required. For local
+development these are read from `dev/run_local/.local.env` (gitignored).
+
+Both importers use their service's client-credentials (app-only) flow, which can read
+public playlists but not a user's private ones.
 
 ## Running locally
 

@@ -25,7 +25,7 @@ use playlist_core::models::{
     track::{LinkedTrack, Track},
 };
 use serde_json::json;
-use wiremock::matchers::{basic_auth, header, method, path, query_param};
+use wiremock::matchers::{basic_auth, header, method, path, query_param, query_param_is_missing};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 const MONGO_URI: &str = "mongodb://localhost:27017";
@@ -110,6 +110,16 @@ fn spotify_id<T: MusicItemBase>(item: &T) -> Option<String> {
         .iter()
         .find_map(|assoc| match assoc {
             ExternalServiceAssociation::Spotify { id, .. } => Some(id.clone()),
+            _ => None,
+        })
+}
+
+/// Return the Tidal id from an item's external service associations, if any.
+fn tidal_id<T: MusicItemBase>(item: &T) -> Option<String> {
+    item.external_service_associations()?
+        .iter()
+        .find_map(|assoc| match assoc {
+            ExternalServiceAssociation::Tidal { id, .. } => Some(id.clone()),
             _ => None,
         })
 }
@@ -588,6 +598,393 @@ async fn import_playlist_rejects_unsupported_service_uri() {
     // Nothing was written.
     let playlists: Vec<PlayList> = collect(&db, "playlist").await;
     assert!(playlists.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// Tidal mock fixture
+// ---------------------------------------------------------------------------
+
+const TIDAL_PLAYLIST_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
+const TIDAL_OWNER_ID: &str = "12345";
+const TIDAL_ACCESS_TOKEN: &str = "test-tidal-access-token";
+const TIDAL_CURSOR_2: &str = "CURSOR2";
+
+/// Stand up a wiremock server mimicking the Tidal v2 JSON:API endpoints the importer hits,
+/// and point the importer's env-var overrides at it.
+///
+/// Every catalogue endpoint requires the Bearer token issued by the mock token endpoint,
+/// `countryCode=AU`, and the `Accept: application/vnd.api+json` header, so the OAuth
+/// round-trip, country propagation and media-type header are verified on every import.
+///
+/// The fixture playlist has items spread over two pages (to exercise cursor pagination):
+/// - page 1 (a next cursor present): one importable track ("Poker Face", PT3M58S, two
+///   artists, one album) and one `videos` item -> skipped;
+/// - page 2 (no next): one track whose resource is absent from `included` (-> skipped) and
+///   a second importable track ("Bad Romance" with a "Radio Edit" version, PT4M55S,
+///   reusing page 1's artist and album to exercise cross-page dedup).
+async fn mock_tidal() -> MockServer {
+    mock_tidal_with_description("Party playlist!").await
+}
+
+/// As [`mock_tidal`], with the playlist `description` attribute set to the given value.
+async fn mock_tidal_with_description(description: &str) -> MockServer {
+    let server = MockServer::start().await;
+
+    // Token endpoint (client-credentials flow): credentials must arrive as HTTP basic auth.
+    Mock::given(method("POST"))
+        .and(path("/v1/oauth2/token"))
+        .and(basic_auth(CLIENT_ID, CLIENT_SECRET))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "access_token": TIDAL_ACCESS_TOKEN,
+            "token_type": "Bearer",
+            "expires_in": 86400,
+            "scope": "",
+        })))
+        .mount(&server)
+        .await;
+
+    // Playlist metadata, cover art, and owner. The importer embeds all three on this call
+    // (include=coverArt,ownerProfiles,owners). The owner is exposed via `ownerProfiles`
+    // (an `artists`-typed profile); `owners` is empty, mirroring real app-only responses.
+    Mock::given(method("GET"))
+        .and(path(format!("/playlists/{TIDAL_PLAYLIST_ID}")))
+        .and(header("authorization", format!("Bearer {TIDAL_ACCESS_TOKEN}")))
+        .and(header("accept", "application/vnd.api+json"))
+        .and(query_param("countryCode", "AU"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {
+                "type": "playlists",
+                "id": TIDAL_PLAYLIST_ID,
+                "attributes": {
+                    "name": "Just Dance 2020",
+                    "description": description,
+                    "accessType": "PUBLIC",
+                },
+                "relationships": {
+                    "coverArt": { "data": [ { "type": "artworks", "id": "art1" } ] },
+                    "ownerProfiles": { "data": [ { "type": "artists", "id": TIDAL_OWNER_ID } ] },
+                    "owners": { "data": [] },
+                },
+            },
+            "included": [
+                {
+                    "type": "artworks",
+                    "id": "art1",
+                    "attributes": {
+                        "mediaType": "IMAGE",
+                        "files": [
+                            { "href": "https://img.tidal/pl-large.jpg", "meta": { "width": 640, "height": 640 } },
+                            { "href": "https://img.tidal/pl-small.jpg", "meta": { "width": 160, "height": 160 } },
+                        ],
+                    },
+                },
+                {
+                    "type": "artists",
+                    "id": TIDAL_OWNER_ID,
+                    "attributes": { "name": "JD Curator", "popularity": 0.0 },
+                },
+            ],
+        })))
+        .mount(&server)
+        .await;
+
+    // Playlist items — page 1 (no page[cursor]); a next cursor points at page 2.
+    Mock::given(method("GET"))
+        .and(path(format!(
+            "/playlists/{TIDAL_PLAYLIST_ID}/relationships/items"
+        )))
+        .and(header("authorization", format!("Bearer {TIDAL_ACCESS_TOKEN}")))
+        .and(header("accept", "application/vnd.api+json"))
+        .and(query_param("countryCode", "AU"))
+        .and(query_param_is_missing("page[cursor]"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [
+                { "type": "tracks", "id": "t1", "meta": { "addedAt": "2024-01-01T00:00:00Z", "itemId": "t1" } },
+                // A video item: must be skipped.
+                { "type": "videos", "id": "v1", "meta": {} },
+            ],
+            "included": [
+                {
+                    "type": "tracks",
+                    "id": "t1",
+                    "attributes": { "title": "Poker Face", "duration": "PT3M58S", "isrc": "X1" },
+                    "relationships": {
+                        "artists": { "data": [ { "type": "artists", "id": "a1" }, { "type": "artists", "id": "a2" } ] },
+                        "albums": { "data": [ { "type": "albums", "id": "al1" } ] },
+                    },
+                },
+                { "type": "artists", "id": "a1", "attributes": { "name": "Lady Gaga" } },
+                { "type": "artists", "id": "a2", "attributes": { "name": "RedOne" } },
+                {
+                    "type": "albums",
+                    "id": "al1",
+                    "attributes": { "title": "The Fame" },
+                    "relationships": { "artists": { "data": [ { "type": "artists", "id": "a1" } ] } },
+                },
+            ],
+            "links": {
+                "self": format!("/playlists/{TIDAL_PLAYLIST_ID}/relationships/items?countryCode=AU"),
+                "next": format!(
+                    "{}/playlists/{TIDAL_PLAYLIST_ID}/relationships/items?countryCode=AU&page[cursor]={TIDAL_CURSOR_2}",
+                    server.uri()
+                ),
+                "meta": { "nextCursor": TIDAL_CURSOR_2 },
+            },
+        })))
+        .mount(&server)
+        .await;
+
+    // Playlist items — page 2 (page[cursor]=CURSOR2), last page (no next). `.expect(1..)`
+    // fails the test if pagination regresses and this page is never fetched.
+    Mock::given(method("GET"))
+        .and(path(format!(
+            "/playlists/{TIDAL_PLAYLIST_ID}/relationships/items"
+        )))
+        .and(header("authorization", format!("Bearer {TIDAL_ACCESS_TOKEN}")))
+        .and(query_param("countryCode", "AU"))
+        .and(query_param("page[cursor]", TIDAL_CURSOR_2))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [
+                // Track whose resource is absent from `included`: must be skipped.
+                { "type": "tracks", "id": "t_missing", "meta": {} },
+                { "type": "tracks", "id": "t2", "meta": {} },
+            ],
+            "included": [
+                {
+                    "type": "tracks",
+                    "id": "t2",
+                    "attributes": { "title": "Bad Romance", "version": "Radio Edit", "duration": "PT4M55S" },
+                    "relationships": {
+                        "artists": { "data": [ { "type": "artists", "id": "a1" } ] },
+                        "albums": { "data": [ { "type": "albums", "id": "al1" } ] },
+                    },
+                },
+                { "type": "artists", "id": "a1", "attributes": { "name": "Lady Gaga" } },
+                {
+                    "type": "albums",
+                    "id": "al1",
+                    "attributes": { "title": "The Fame" },
+                    "relationships": { "artists": { "data": [ { "type": "artists", "id": "a1" } ] } },
+                },
+            ],
+            "links": {
+                "self": format!("/playlists/{TIDAL_PLAYLIST_ID}/relationships/items?countryCode=AU&page[cursor]={TIDAL_CURSOR_2}"),
+            },
+        })))
+        .expect(1..)
+        .mount(&server)
+        .await;
+
+    server
+}
+
+/// Point the importer at the mock server via its documented env-var overrides.
+fn configure_tidal_env(server: &MockServer) {
+    set_env("TIDAL_API_BASE", &server.uri());
+    set_env(
+        "TIDAL_TOKEN_URL",
+        &format!("{}/v1/oauth2/token", server.uri()),
+    );
+    set_env("TIDAL_CLIENT_ID", CLIENT_ID);
+    set_env("TIDAL_CLIENT_SECRET", CLIENT_SECRET);
+    set_env("TIDAL_COUNTRY", "AU");
+    // Make sure ambient configuration doesn't leak into the user_id fallback logic.
+    remove_env("IMPORT_USER_ID");
+}
+
+fn tidal_playlist_url() -> String {
+    format!("https://tidal.com/browse/playlist/{TIDAL_PLAYLIST_ID}")
+}
+
+// ---------------------------------------------------------------------------
+// import_playlist (Tidal)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn import_tidal_playlist_imports_tracks_artists_album_compiler_and_images() {
+    let db = fresh_db("playlist_test_cli_tidal_import").await;
+    let server = mock_tidal().await;
+    configure_tidal_env(&server);
+
+    import_playlist(
+        db.clone(),
+        &tidal_playlist_url(),
+        None,
+        None,
+        Some(1600000000.0),
+    )
+    .await
+    .expect("import failed");
+
+    // --- Playlist ---
+    let playlists: Vec<PlayList> = collect(&db, "playlist").await;
+    assert_eq!(playlists.len(), 1);
+    let playlist = &playlists[0];
+    assert!(
+        is_generated_id(&playlist.id),
+        "playlist id: {}",
+        playlist.id
+    );
+    assert_eq!(playlist.name, "Just Dance 2020");
+    assert_eq!(playlist.name_normalised, "just dance 2020");
+    // Non-empty description -> stored as notes.
+    assert_eq!(playlist.notes.as_deref(), Some("Party playlist!"));
+    assert_eq!(playlist.date, Some(1600000000.0));
+    // The video item and the track missing from `included` are skipped; the importable
+    // track on each of the two pages remains (a missing page 2 would fail here).
+    assert_eq!(playlist.track_ids.len(), 2);
+    // Duration sums only the imported tracks, across both pages (238 + 295).
+    assert_eq!(playlist.duration, 238.0 + 295.0);
+    // No user_id given anywhere -> falls back to the Tidal owner id.
+    assert_eq!(playlist.user_id, TIDAL_OWNER_ID);
+    assert_eq!(tidal_id(playlist).as_deref(), Some(TIDAL_PLAYLIST_ID));
+
+    // Playlist images: two files -> sorted by width, smallest = small, largest = large.
+    let Some([ExternalServiceAssociation::Tidal { image_urls, .. }]) =
+        playlist.external_service_associations.as_deref()
+    else {
+        panic!("expected exactly one Tidal association on the playlist");
+    };
+    let image_urls = image_urls.as_ref().expect("playlist should have images");
+    assert_eq!(
+        image_urls.large.as_deref(),
+        Some("https://img.tidal/pl-large.jpg")
+    );
+    assert_eq!(
+        image_urls.small.as_deref(),
+        Some("https://img.tidal/pl-small.jpg")
+    );
+    assert_eq!(image_urls.medium, None);
+
+    // --- Tracks (one importable track per page, in playlist order) ---
+    let tracks: Vec<Track> = collect(&db, "track").await;
+    assert_eq!(tracks.len(), 2);
+    let track = tracks
+        .iter()
+        .find(|t| tidal_id(*t).as_deref() == Some("t1"))
+        .expect("page-1 track doc");
+    let track2 = tracks
+        .iter()
+        .find(|t| tidal_id(*t).as_deref() == Some("t2"))
+        .expect("page-2 track doc");
+    assert_eq!(
+        playlist.track_ids,
+        vec![track.id.clone(), track2.id.clone()]
+    );
+    assert_eq!(track.name, "Poker Face");
+    assert_eq!(track.name_normalised, "poker face");
+    assert_eq!(track.duration, Some(238.0));
+    // Title + version qualifier are combined into a single display name.
+    assert_eq!(track2.name, "Bad Romance (Radio Edit)");
+    assert_eq!(track2.name_normalised_strong, "bad romance");
+    assert_eq!(track2.duration, Some(295.0));
+
+    // --- Artists (deduplicated across both tracks, the album, and both pages) ---
+    let artists: Vec<Artist> = collect(&db, "artist").await;
+    assert_eq!(artists.len(), 2);
+    let gaga = artists
+        .iter()
+        .find(|a| tidal_id(*a).as_deref() == Some("a1"))
+        .expect("Lady Gaga artist doc");
+    let redone = artists
+        .iter()
+        .find(|a| tidal_id(*a).as_deref() == Some("a2"))
+        .expect("RedOne artist doc");
+    assert_eq!(gaga.name, "Lady Gaga");
+    assert_eq!(redone.name, "RedOne");
+    assert_eq!(track.artist_ids, vec![gaga.id.clone(), redone.id.clone()]);
+    assert_eq!(track2.artist_ids, vec![gaga.id.clone()]);
+
+    // --- Album (shared by both tracks, deduplicated across pages) ---
+    let albums: Vec<Album> = collect(&db, "album").await;
+    assert_eq!(albums.len(), 1);
+    let album = &albums[0];
+    assert_eq!(album.name, "The Fame");
+    assert_eq!(tidal_id(album).as_deref(), Some("al1"));
+    assert_eq!(track.album_id, Some(album.id.clone()));
+    assert_eq!(track2.album_id, Some(album.id.clone()));
+    assert_eq!(album.artist_ids, vec![gaga.id.clone()]);
+
+    // --- Compiler (playlist owner, name from the embedded user profile) ---
+    let compilers: Vec<Compiler> = collect(&db, "compiler").await;
+    assert_eq!(compilers.len(), 1);
+    let compiler = &compilers[0];
+    assert_eq!(tidal_id(compiler).as_deref(), Some(TIDAL_OWNER_ID));
+    assert_eq!(compiler.name, "JD Curator");
+    assert_eq!(playlist.compiler_ids, vec![compiler.id.clone()]);
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn import_tidal_playlist_twice_is_idempotent() {
+    let db = fresh_db("playlist_test_cli_tidal_idem").await;
+    let server = mock_tidal().await;
+    configure_tidal_env(&server);
+
+    import_playlist(db.clone(), &tidal_playlist_url(), None, None, None)
+        .await
+        .expect("first import failed");
+
+    let playlists: Vec<PlayList> = collect(&db, "playlist").await;
+    let first_playlist_id = playlists[0].id.clone();
+    let tracks: Vec<Track> = collect(&db, "track").await;
+    let first_track_ids = sorted(tracks.iter().map(|t| t.id.clone()).collect());
+
+    import_playlist(db.clone(), &tidal_playlist_url(), None, None, None)
+        .await
+        .expect("second import failed");
+
+    // Counts are unchanged: everything was matched by its Tidal id and replaced.
+    let playlists: Vec<PlayList> = collect(&db, "playlist").await;
+    let tracks: Vec<Track> = collect(&db, "track").await;
+    let artists: Vec<Artist> = collect(&db, "artist").await;
+    let albums: Vec<Album> = collect(&db, "album").await;
+    let compilers: Vec<Compiler> = collect(&db, "compiler").await;
+    assert_eq!(playlists.len(), 1);
+    assert_eq!(tracks.len(), 2);
+    assert_eq!(artists.len(), 2);
+    assert_eq!(albums.len(), 1);
+    assert_eq!(compilers.len(), 1);
+
+    // The find_existing_id path keeps the same generated _ids across imports.
+    assert_eq!(playlists[0].id, first_playlist_id);
+    assert_eq!(
+        sorted(tracks.iter().map(|t| t.id.clone()).collect()),
+        first_track_ids
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires MongoDB; run via dev/test/run_integration.sh"]
+async fn import_tidal_playlist_applies_name_and_user_id_overrides() {
+    let db = fresh_db("playlist_test_cli_tidal_override").await;
+    // This scenario's playlist has an empty description, which must not become notes.
+    let server = mock_tidal_with_description("").await;
+    configure_tidal_env(&server);
+    // The explicit user_id argument outranks IMPORT_USER_ID.
+    set_env("IMPORT_USER_ID", "envUser42");
+
+    let result = import_playlist(
+        db.clone(),
+        &tidal_playlist_url(),
+        Some("customUser123".to_string()),
+        Some("My Renamed List".to_string()),
+        None,
+    )
+    .await;
+    // Clean up before asserting so a failure cannot leak the var into later tests.
+    remove_env("IMPORT_USER_ID");
+    result.expect("import failed");
+
+    let playlists: Vec<PlayList> = collect(&db, "playlist").await;
+    assert_eq!(playlists.len(), 1);
+    let playlist = &playlists[0];
+    assert_eq!(playlist.name, "My Renamed List");
+    assert_eq!(playlist.name_normalised, "my renamed list");
+    assert_eq!(playlist.user_id, "customUser123");
+    // Empty description -> filtered out of notes.
+    assert_eq!(playlist.notes, None);
 }
 
 // ---------------------------------------------------------------------------

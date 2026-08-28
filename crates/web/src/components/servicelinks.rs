@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use playlist_core::models::{ExternalServiceAssociation, ItemType, MusicItem};
 
 const SPOTIFY_ICON: Asset = asset!("/assets/external_service_icons/spotify.png");
+const TIDAL_ICON: Asset = asset!("/assets/external_service_icons/tidal.svg");
 const MUSICBRAINZ_ICON: Asset = asset!("/assets/external_service_icons/musicbrainz.png");
 const YOUTUBE_ICON: Asset = asset!("/assets/external_service_icons/youtube.png");
 
@@ -16,6 +17,9 @@ pub fn ServiceLinks<T: MusicItem + PartialEq + 'static>(music_item: T) -> Elemen
                         match service_association {
                             ExternalServiceAssociation::Spotify { id, image_urls: _ } => rsx! {
                                 SpotifyLink { id: id.clone(), item_type: T::item_type() }
+                            },
+                            ExternalServiceAssociation::Tidal { id, image_urls: _ } => rsx! {
+                                TidalLink { id: id.clone(), item_type: T::item_type() }
                             },
                             ExternalServiceAssociation::MusicBrainz { id } => rsx! {
                                 MusicBrainzLink { id: id.clone(), item_type: T::item_type() }
@@ -45,6 +49,28 @@ pub fn SpotifyLink(id: String, item_type: ItemType) -> Element {
             rel: "noopener noreferrer",
             class: "service-icon",
             style: "background-image: url({SPOTIFY_ICON}); background-size: contain; background-repeat: no-repeat; background-position: center;",
+        }
+    }
+}
+
+#[component]
+pub fn TidalLink(id: String, item_type: ItemType) -> Element {
+    // Tidal exposes catalogue pages under /browse/<type>/<id>. A Compiler (playlist
+    // creator) is imported from Tidal's `ownerProfiles`, which Tidal models as an artist
+    // profile, so its public page is /browse/artist/<id>.
+    let url = match item_type {
+        ItemType::Track => format!("https://tidal.com/browse/track/{}", id),
+        ItemType::Artist | ItemType::Compiler => format!("https://tidal.com/browse/artist/{}", id),
+        ItemType::Album => format!("https://tidal.com/browse/album/{}", id),
+        ItemType::Playlist => format!("https://tidal.com/browse/playlist/{}", id),
+    };
+    rsx! {
+        a {
+            href: "{url}",
+            target: "_blank",
+            rel: "noopener noreferrer",
+            class: "service-icon",
+            style: "background-image: url({TIDAL_ICON}); background-size: contain; background-repeat: no-repeat; background-position: center;",
         }
     }
 }

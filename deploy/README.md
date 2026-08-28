@@ -39,7 +39,7 @@ the stack.
 
 ```bash
 cd deploy/vps
-cp .playlist.env.example .playlist.env   # edit: SITE_ADDRESS, DB_NAME, Spotify creds
+cp .playlist.env.example .playlist.env   # edit: SITE_ADDRESS, DB_NAME, music-service creds
 # Point your domain's DNS A record at the VPS, then:
 ./provision_vps.sh root@<vps-ip>         # or [user@]host [-p PORT] [-d REMOTE_DIR]
 ```
@@ -58,7 +58,7 @@ sudo ./install_docker.sh        # then log out/in (or `newgrp docker`)
 sudo ./setup_ufw.sh
 
 # Configure
-cp .playlist.env.example .playlist.env   # edit: SITE_ADDRESS, DB_NAME, Spotify creds
+cp .playlist.env.example .playlist.env   # edit: SITE_ADDRESS, DB_NAME, music-service creds
 
 # Start (pulls the latest image, then brings everything up)
 ./start.sh
@@ -94,8 +94,8 @@ docker compose --env-file .playlist.env exec web playlist-cli dbmigrate
 
 ### Importing a playlist (the CLI / terminal access)
 
-Run the CLI inside the running web container — it inherits the DB and Spotify
-environment from compose:
+Run the CLI inside the running web container — it inherits the DB and
+music-service environment from compose:
 
 ```bash
 docker compose --env-file .playlist.env exec web playlist-cli import \

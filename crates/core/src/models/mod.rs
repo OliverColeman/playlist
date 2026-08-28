@@ -32,6 +32,11 @@ pub enum ExternalServiceAssociation {
         #[serde(skip_serializing_if = "Option::is_none")]
         image_urls: Option<ImageUrls>,
     },
+    Tidal {
+        id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        image_urls: Option<ImageUrls>,
+    },
     MusicBrainz {
         id: String,
     },
