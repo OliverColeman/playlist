@@ -18,18 +18,34 @@ this directory.
 
 ## VPS deployment (`deploy/vps/`)
 
-Everything needed on the server lives in `deploy/vps/`:
+Everything needed to deploy lives in `deploy/vps/`. The files split by where
+you use them — driven from your local machine over SSH, kept as config, or run
+on the VPS itself.
+
+**Run from your local machine (over SSH):**
+
+| File | Purpose |
+| --- | --- |
+| `provision_vps.sh` | First-run setup of a **fresh** VPS: copy files, install Docker, configure the firewall, ensure swap, start. |
+| `update_vps.sh` | **Redeploy** an already-provisioned VPS: re-copy config, pull the latest image, restart. |
+| `remote_playlist_cli.sh` | Run `playlist-cli` in the web container over SSH. |
+| `_common.sh` | Shared helpers sourced by the two scripts above (not run directly). |
+
+**Config (in the deploy root; `provision_vps.sh` / `update_vps.sh` copy these to the VPS):**
 
 | File | Purpose |
 | --- | --- |
 | `compose.yaml` | Pulls the GHCR image; runs Caddy + web + MongoDB. |
 | `Caddyfile` | Reverse-proxy config (automatic HTTPS). |
-| `.playlist.env.example` | Template for the env file the scripts load. |
-| `start.sh` / `stop.sh` | Pull + (re)start, and stop. |
-| `remote_playlist_cli.sh` | **Run from your local machine** — runs `playlist-cli` in the web container over SSH. |
-| `install_docker.sh` | Install Docker Engine + Compose on Ubuntu/Debian. |
-| `setup_ufw.sh` | Firewall: allow SSH, 80, 443. |
-| `provision_vps.sh` | **Run from your local machine** — sets up a fresh VPS over SSH. |
+| `.playlist.env.example` | Template for `.playlist.env`, which the scripts load. |
+
+**Run on the VPS (`server/`):**
+
+| File | Purpose |
+| --- | --- |
+| `server/start.sh` / `server/stop.sh` | Pull + (re)start, and stop. |
+| `server/install_docker.sh` | Install Docker Engine + Compose on Ubuntu/Debian. |
+| `server/setup_ufw.sh` | Firewall: allow SSH, 80, 443. |
 
 ### One-command provisioning (from your local machine)
 
@@ -44,9 +60,11 @@ cp .playlist.env.example .playlist.env   # edit: SITE_ADDRESS, DB_NAME, music-se
 ./provision_vps.sh root@<vps-ip>         # or [user@]host [-p PORT] [-d REMOTE_DIR]
 ```
 
-The SSH user must be root or have sudo. Run it again any time to re-deploy
-(it re-pulls the latest image and restarts). The manual steps below are the
-equivalent if you'd rather set things up by hand on the box.
+The SSH user must be root or have sudo. `provision_vps.sh` is for the **first
+run** on a fresh box; for routine redeploys afterwards use `update_vps.sh`
+(see [Updating after a new image is published](#updating-after-a-new-image-is-published)),
+which skips the one-time host setup. The manual steps below are the equivalent
+of the first run if you'd rather set things up by hand on the box.
 
 ### First run on the VPS (manual)
 
@@ -54,18 +72,19 @@ equivalent if you'd rather set things up by hand on the box.
 cd deploy/vps
 
 # One-time host setup
-sudo ./install_docker.sh        # then log out/in (or `newgrp docker`)
-sudo ./setup_ufw.sh
+sudo ./server/install_docker.sh   # then log out/in (or `newgrp docker`)
+sudo ./server/setup_ufw.sh
 
 # Configure
 cp .playlist.env.example .playlist.env   # edit: SITE_ADDRESS, DB_NAME, music-service creds
 
 # Start (pulls the latest image, then brings everything up)
-./start.sh
+./server/start.sh
 ```
 
-`start.sh` / `stop.sh` run `docker compose` from this directory, so the
-`compose.yaml` here is picked up automatically — no `-f` needed. They load
+`server/start.sh` / `server/stop.sh` run `docker compose` from the deploy root
+(they resolve it themselves regardless of where you invoke them), so the
+`compose.yaml` there is picked up automatically — no `-f` needed. They load
 `.playlist.env` via `--env-file`.
 
 ### TLS and the public domain (Caddy)
@@ -130,9 +149,20 @@ PLAYLIST_VPS=root@vps.example.com PLAYLIST_SSH_PORT=2222 PLAYLIST_REMOTE_DIR=/op
 
 ### Updating after a new image is published
 
+**From your local machine** (the usual way — also re-copies `compose.yaml`, the
+`Caddyfile`, and `.playlist.env`, so config edits ship too):
+
 ```bash
 cd deploy/vps
-./start.sh        # re-pulls latest and restarts
+./update_vps.sh root@<vps-ip>        # same [user@]host [-p PORT] [-d REMOTE_DIR] as provision_vps.sh
+```
+
+**On the VPS** (if you're already logged in — this only pulls + restarts, it
+does not re-copy config from your machine):
+
+```bash
+cd <deploy dir>   # e.g. ~/playlist
+./server/start.sh        # re-pulls latest and restarts
 ```
 
 ### Logs and lifecycle
@@ -141,7 +171,7 @@ cd deploy/vps
 cd deploy/vps
 docker compose --env-file .playlist.env logs -f web   # follow web server logs
 docker compose --env-file .playlist.env ps            # status
-./stop.sh                                             # stop (keeps data volume)
+./server/stop.sh                                      # stop (keeps data volume)
 docker compose --env-file .playlist.env down -v       # stop AND delete volumes
 ```
 

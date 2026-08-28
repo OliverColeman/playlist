@@ -6,7 +6,7 @@ set -e
 # then configure the current user to run Docker without sudo.
 
 if [ "$EUID" -ne 0 ]; then
-    echo "Please run as root (sudo ./install_docker.sh)"
+    echo "Please run as root (sudo ./server/install_docker.sh from the deploy directory)"
     exit 1
 fi
 
@@ -35,4 +35,4 @@ usermod -aG docker "$REAL_USER"
 
 echo ""
 echo "Docker installed successfully."
-echo "Log out and back in (or run 'newgrp docker') for the group change to take effect, then run ./start.sh"
+echo "Log out and back in (or run 'newgrp docker') for the group change to take effect, then run ./server/start.sh from the deploy directory"
